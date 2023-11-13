@@ -5,7 +5,7 @@ clear all;clc;
 rng(0);
 
 % GPU
-GPU_num = 2;
+GPU_num = 4;
 gpuDevice(GPU_num);
 reset(gpuDevice(GPU_num));
 executionEnvironment = 'gpu';
