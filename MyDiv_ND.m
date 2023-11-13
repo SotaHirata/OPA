@@ -4,7 +4,7 @@ n_size_TV = size(TV);
 n_size = n_size_TV(1 : end - 1);
 n_size_TV_end = size(n_size, 2);
 
-y = zeros(n_size);
+y = zeros(n_size,'double','gpuArray');
 
 for k = 1 : size(n_size, 2)
     
