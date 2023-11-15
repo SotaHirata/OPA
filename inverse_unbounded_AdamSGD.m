@@ -12,7 +12,7 @@ executionEnvironment = 'gpu';
 gpurng(0);
 
 %パラメタ
-M = 11;     %uniformアレイの1辺の長さ
+M = 10;     %uniformアレイの1辺の長さ
 N = M^2;    %アンテナ数
 K = N^2*4;    %照射パターン数
 
@@ -52,13 +52,13 @@ A = array.*gpuArray(double(exp(1i*phi)));
 r = array.*ones(N,N,'double','gpuArray')*2*pi; %for uniformアレイ
 
 %PDの観測強度（K×1配列）
-S = zeros(1,K);
+S = zeros(1,K,'double','gpuArray');
 for batch_start = 1:batch_size:K
     %照射パターンF
     batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size -1, K)).*gpuArray(double(exp(1i*r))));
     S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
 end
-S = gpuArray(double(reshape(S, [K,1])));
+S = reshape(S, [K,1]);
 
 %ここから逆問題
 figure(100);
