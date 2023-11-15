@@ -117,7 +117,7 @@ for epoch = 1:num_epoch
             hundreds = hundreds + 1;
             
             subplot(3,2,1)
-            imagesc(O_hat); colormap gray; axis image; colorbar;
+            imagesc(real(O_hat)); colormap gray; axis image; colorbar;
             title(['Reconstructed object ( itr=',num2str(itr), ' )']);
     
             subplot(3,2,2)

@@ -86,7 +86,7 @@ epsilon_r = 1e-8;
 
 %TVの初期パラメタ
 %rho_O = 0; %TVなし
-rho_O = 6e6; %TVあり
+rho_O = 6e9; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -130,7 +130,7 @@ for epoch = 1:num_epoch
             hundreds = hundreds + 1;
     
             subplot(3,2,1)
-            imagesc(O_hat); colormap gray; axis image; colorbar;
+            imagesc(real(O_hat)); colormap gray; axis image; colorbar;
             title(['Reconstructed image ( itr=',num2str(itr), ' )']);
     
             subplot(3,2,2)
