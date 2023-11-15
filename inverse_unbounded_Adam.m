@@ -10,10 +10,10 @@ N = M^2;    %アンテナ数
 K = N^2*4;    %照射パターン数
 
 %強度分布画像を生成（N×N）
-obj = MyRect(N, N/3);
+obj = MyRect(N, N/5, [N/2-2, N/2-2]);
 
 %サポート
-sup = MyRect(N, N-6);
+sup = MyRect(N, N);
 
 %アンテナ位置を表す行列（N×N）
 %array = MyRect(N, M); %for uniformアレイ
@@ -32,8 +32,9 @@ A = exp(1i*phi).*array;
 r = array.*rand(N,N)*2*pi; %for uniformアレイ
 
 %アンテナ1個の遠視野
-U = MyGaussian2D(N,N,N/2,N/2,3,3);
+U = MyGaussian2D(N,N,N/2+1,N/2+1,N/8,N/8);
 U = U/max(U(:));
+%U = ones(N);
 
 %照射パターン（N×N×K）
 F = MyFFT2(A.*exp(1i*r)).*U;

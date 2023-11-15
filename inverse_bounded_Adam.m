@@ -11,11 +11,11 @@ K =  N^2*4;    %照射パターン数
 maskD = N-4; %PDの受光範囲の直径
 
 %複素振幅画像を生成（N×N）
-obj = MyRect(N, N/3);
+obj = MyRect(N, N/5);
 %obj = MyRect(N, [N/2,N/4],[N/2, N/4]) + MyRect(N, [N/2,N/4],[N/2,3*N/4]);
 
 %サポート
-sup = MyRect(N, N-6);
+sup = MyRect(N, N/2);
 
 %アンテナ位置を表す行列（N×N）
 %array = MyRect(N, M); %for uniformアレイ
@@ -34,11 +34,16 @@ A = exp(1i*phi).*array;
 %位相バイアス（N×N）
 r = array.*rand(N)*2*pi; 
 
+%アンテナ1個の遠視野
+U = MyGaussian2D(N,N,N/2+1,N/2+1,N/8,N/8);
+U = U/max(U(:));
+%U = ones(N);
+
 %PDの受光範囲マスクを作成（N×N）
 mask = MyCirc(N, maskD); 
 
 %PDの観測強度（K×1配列）
-S = reshape(sum(abs(MyIFFT2(MyFFT2(A.*exp(1i*r)).*obj.*sup)).^2.*mask, [1,2]), [K,1]); 
+S = reshape(sum(abs(MyIFFT2(MyFFT2(A.*exp(1i*r)).*U.*obj.*sup)).^2.*mask, [1,2]), [K,1]); 
 
 
 %ここから逆問題
@@ -72,7 +77,7 @@ elapsed_times = zeros(num_itr/100, 1);
 tic;
 for itr = 1:num_itr
 
-    F = MyFFT2(A.*exp(1i*r_hat));
+    F = MyFFT2(A.*exp(1i*r_hat)).*U;
     I = MyIFFT2(F.*O_hat); 
     S_hat = reshape(sum(abs(I).^2.*mask, [1,2]), [K,1]); 
 
@@ -81,7 +86,7 @@ for itr = 1:num_itr
     
     %O,rの勾配
     st_O = 2*sum(2*conj(F).*MyFFT2(I.*mask.*reshape(e,[1,1,K])),3);
-    st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(A).*MyIFFT2(conj(O_hat).*MyFFT2(I.*mask.*reshape(e,[1,1,K]))),3);
+    st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(A).*MyIFFT2(conj(O_hat.*U).*MyFFT2(I.*mask.*reshape(e,[1,1,K]))),3);
     
     %Adam
     [st_O, m_O, v_O] = Adam_func(st_O,m_O,v_O,itr,alpha_O,beta_1_O,beta_2_O,epsilon_O);
