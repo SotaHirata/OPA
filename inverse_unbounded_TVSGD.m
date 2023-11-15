@@ -23,14 +23,13 @@ num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %強度分布画像を生成（N×N）
-obj = gpuArray(double(MyRect(N,N/2))) ;
-%{
+%obj = gpuArray(double(MyRect(N,N/2))) ;
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
-obj = gpuArray(double(obj)).*MyRect(N, N/2);
-%}
+obj = gpuArray(double(obj.*MyRect(N, N)));
+
 
 %サポート
 sup =gpuArray(double(MyRect(N, N)));
@@ -86,7 +85,7 @@ epsilon_r = 1e-8;
 
 %TVの初期パラメタ
 %rho_O = 0; %TVなし
-rho_O = 6e9; %TVあり
+rho_O = 6e8; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
