@@ -31,8 +31,12 @@ A = exp(1i*phi).*array;
 %位相バイアス（N×N）
 r = array.*rand(N,N)*2*pi; %for uniformアレイ
 
+%アンテナ1個の遠視野
+U = MyGaussian2D(N,N,N/2,N/2,3,3);
+U = U/max(U(:));
+
 %照射パターン（N×N×K）
-F = MyFFT2(A.*exp(1i*r));
+F = MyFFT2(A.*exp(1i*r)).*U;
 
 %PDの観測強度（K×1配列）
 S = reshape(sum(abs(F).^2.*obj.*sup, [1,2]), [K,1]); 
@@ -68,7 +72,7 @@ elapsed_times = zeros(num_itr/100, 1);
 tic;
 for itr = 1:num_itr
 
-    F = MyFFT2(A.*exp(1i*r_hat));
+    F = MyFFT2(A.*exp(1i*r_hat)).*U;
     S_hat = reshape(sum(abs(F).^2.*O_hat, [1,2]), [K,1]);
 
     e = S_hat- S;
@@ -76,7 +80,7 @@ for itr = 1:num_itr
 
     %O,rの勾配
     st_O = 2*sum(abs(F).^2.*reshape(e, [1,1,K]), 3);
-    st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(A).*MyIFFT2(F.*O_hat.*reshape(e, [1,1,K])),3);
+    st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(A).*MyIFFT2(U.*F.*O_hat.*reshape(e, [1,1,K])),3);
         
     %Adam
     [st_O, m_O, v_O] = Adam_func(st_O,m_O,v_O,itr,alpha_O,beta_1_O,beta_2_O,epsilon_O);
