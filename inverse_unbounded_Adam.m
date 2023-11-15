@@ -10,10 +10,10 @@ N = M^2;    %アンテナ数
 K = N^2*4;    %照射パターン数
 
 %強度分布画像を生成（N×N）
-obj = MyRect(N, N/5, [N/2-2, N/2-2]);
+obj = MyRect(N, N/5, [N/2+3, N/2+3]);
 
 %サポート
-sup = MyRect(N, N);
+sup = MyRect(N, N/2);
 
 %アンテナ位置を表す行列（N×N）
 %array = MyRect(N, M); %for uniformアレイ

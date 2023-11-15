@@ -15,7 +15,7 @@ obj = MyRect(N, N/5);
 %obj = MyRect(N, [N/2,N/4],[N/2, N/4]) + MyRect(N, [N/2,N/4],[N/2,3*N/4]);
 
 %サポート
-sup = MyRect(N, N/2);
+sup = MyRect(N, N);
 
 %アンテナ位置を表す行列（N×N）
 %array = MyRect(N, M); %for uniformアレイ
