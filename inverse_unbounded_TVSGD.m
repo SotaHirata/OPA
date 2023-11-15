@@ -38,7 +38,7 @@ sup =gpuArray(double(MyRect(N, N)));
 array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9.mat') ;
 %array = gpuArray(double(randomarray));
-%load('Costasarray_N127.mat') ;
+%load('Costasarray_N101.mat') ;
 %array = gpuArray(double(matrix));%for Costasアレイ
 
 %位相シフトKパターン（N×N×K）
@@ -90,8 +90,8 @@ tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
 
-v_TV_O =  ones(N);
-u_TV_O = zeros(N);
+v_TV_O =  ones(N,'double','gpuArray');
+u_TV_O = zeros(N,'double','gpuArray');
 
 elapsed_times = zeros(floor(num_itr/100), 1);
 itr = 0;
