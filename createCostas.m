@@ -1,5 +1,5 @@
 % テキストファイルの読み込み
-filename = 'Costas_essense_N=41.txt'; % ファイル名を適切に変更
+filename = 'Costas_essense_N=101.txt'; % ファイル名を適切に変更
 data = importdata(filename);
 
 % Nの計算
@@ -15,7 +15,7 @@ for i = 1:N
 end
 
 % 結果を.matファイルに保存
-outputFilename = 'Costasarray_N41.mat'; % 保存するファイル名を指定
+outputFilename = 'Costasarray_N101.mat'; % 保存するファイル名を指定
 save(outputFilename, 'matrix');
 
 disp(['結果を ' outputFilename ' に保存しました。']);
@@ -28,7 +28,7 @@ imshow(image);
 title('Costas Array Image'); % 画像にタイトルを追加
 
 % 輝度画像をファイルに保存
-imageFilename = 'CostasArray_N41.png'; % 保存する画像ファイル名を指定
+imageFilename = 'CostasArray_N101.png'; % 保存する画像ファイル名を指定
 imwrite(image, imageFilename);
 
 disp(['輝度画像を ' imageFilename ' に保存しました。']);
