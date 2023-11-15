@@ -13,9 +13,9 @@ gpurng(0);
 
 %パラメタ
 M = 10;     %uniformアレイの1辺の長さ
-N = M^2;    %アンテナ数
+N = 101;    %アンテナ数
 K =  N^2*4;    %照射パターン数
-maskD = N/2; %PDの受光範囲の直径
+maskD = N/10; %PDの受光範囲の直径
 
 %SGDの設定
 num_epoch = 100;  %エポック数
@@ -31,6 +31,7 @@ img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
 obj = gpuArray(double(obj.*MyRect(N, N)));
+obj = obj.*exp(1i*2*pi*rot90(obj));
 %}
 
 %サポート
@@ -40,14 +41,14 @@ sup =gpuArray(double(MyRect(N, N)));
 %array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9');
 %array = gpuArray(double(randomarray));
-%load('Costasarray_N101.mat') ;
-%array = gpuArray(double(matrix));%for Costasアレイ
+load('Costasarray_N101.mat') ;
+array = gpuArray(double(matrix));%for Costasアレイ
 
 %位相シフトKパターン（N×N×K）
 phi = array.*rand(N,N,K,'double','gpuArray')*2*pi; 
 
 %アンテナ配置×位相シフト（N×N×K）
-A = array.*gpuArray(double(exp(1i*phi))); 
+A = array.*exp(1i*phi); 
 
 %位相バイアス（N×N）
 r = array.*rand(N,N,'double','gpuArray')*2*pi; 
@@ -58,7 +59,7 @@ mask = gpuArray(double(MyCirc(N, maskD)));
 %PDの観測強度（K×1配列）
 S = zeros(1,K,'double','gpuArray');
 for batch_start = 1:batch_size:K
-    S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(MyIFFT2(MyFFT2(A(batch_start:min(batch_start+batch_size -1, K)).*exp(1i*r)).*obj.*sup)).^2.*mask, [1,2]); 
+    S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(MyIFFT2(MyFFT2(A(:,:,batch_start:min(batch_start+batch_size -1, K)).*exp(1i*r)).*obj.*sup)).^2.*mask, [1,2]); 
 end
 S = reshape(S, [K,1]); 
 
@@ -72,15 +73,15 @@ batch_es = zeros(num_itr,1,'double','gpuArray');
 %adamの初期パラメタ
 m_O = zeros(N,'double','gpuArray');
 v_O = zeros(N,'double','gpuArray');
-alpha_O = 5e-2;
-beta_1_O = 0.95;
+alpha_O = 1e-1;
+beta_1_O = 0.97;
 beta_2_O = 0.999;
 epsilon_O = 1e-8;
 
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
-alpha_r = 5e-2;
-beta_1_r = 0.95;
+alpha_r = 1e-1;
+beta_1_r = 0.98;
 beta_2_r = 0.999;
 epsilon_r = 1e-8;
 
@@ -89,10 +90,10 @@ epsilon_r = 1e-8;
 
 %TVの初期パラメタ
 %rho_O = 0;
-rho_O = 6e2; 
+rho_O = 6e3; 
 tv_th = 1e-2;
 tv_tau = 0.05;
-tv_iter = 4; %TVの反復数
+tv_iter = 5; %TVの反復数
 
 v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
