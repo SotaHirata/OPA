@@ -13,39 +13,43 @@ gpurng(0);
 
 %パラメタ
 M = 10;     %uniformアレイの1辺の長さ
-N = M^2;    %アンテナ数
-K = N^2*4;    %照射パターン数
+N = 101;    %アンテナ数
+K = N^2*5;    %照射パターン数
 
 %SGDの設定
 num_epoch = 100;  %エポック数
-batch_size = 2^6; %バッチサイズ
+batch_size = 2^7; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %強度分布画像を生成（N×N）
-%obj = gpuArray(double(MyRect(N,N/2))) ;
+obj = gpuArray(double(MyRect(N,N/2))) ;
+%{
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
 obj = gpuArray(double(obj.*MyRect(N, N)));
-
+%}
 
 %サポート
-sup =gpuArray(double(MyRect(N, N)));
+sup =gpuArray(double(MyRect(N, N/1.5)));
 
 %アンテナ位置を表す行列（N×N）
-array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
+%array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9.mat') ;
 %array = gpuArray(double(randomarray));
-%load('Costasarray_N101.mat') ;
+load('Costasarray_N101.mat') ;
+array = matrix;
 %array = gpuArray(double(matrix));%for Costasアレイ
 
 %位相シフトKパターン（N×N×K）
-phi = array.*rand(N,N,K,'double','gpuArray')*2*pi;
+phi = array.*rand(N,N,K)*2*pi;
+%phi = array.*rand(N,N,K,'double','gpuArray')*2*pi;
 
 %アンテナ配置×位相シフト（N×N×K）
-A = array.*gpuArray(double(exp(1i*phi))); 
+A = array.*exp(1i*phi);
+%A = array.*gpuArray(double(exp(1i*phi))); 
 
 %位相バイアス（N×N）
 r = array.*rand(N,N,'double','gpuArray')*2*pi; 
@@ -69,14 +73,14 @@ batch_es = zeros(num_itr,1,'double','gpuArray');
 m_O = zeros(N,'double','gpuArray');
 v_O = zeros(N,'double','gpuArray');
 alpha_O = 1e-1;
-beta_1_O = 0.95;
+beta_1_O = 0.98;
 beta_2_O = 0.999;
 epsilon_O = 1e-8;
 
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
 alpha_r = 1e-1;
-beta_1_r = 0.95;
+beta_1_r = 0.98;
 beta_2_r = 0.999;
 epsilon_r = 1e-8;
 
@@ -85,7 +89,7 @@ epsilon_r = 1e-8;
 
 %TVの初期パラメタ
 %rho_O = 0; %TVなし
-rho_O = 6e8; %TVあり
+rho_O = 6e6; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -118,7 +122,7 @@ for epoch = 1:num_epoch
         [st_r, m_r, v_r] = Adam_func(st_r,m_r,v_r,itr,alpha_r,beta_1_r,beta_2_r,epsilon_r);
        
         %O,rの更新
-        O_hat = (O_hat - st_O).*sup; %Oの更新式
+        O_hat = (O_hat - st_O).*sup; %Oの更新式 
         r_hat = r_hat - real(st_r); %rの更新式
     
         %v,uの更新

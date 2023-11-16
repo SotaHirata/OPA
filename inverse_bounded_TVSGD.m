@@ -15,7 +15,7 @@ gpurng(0);
 M = 10;     %uniformアレイの1辺の長さ
 N = 101;    %アンテナ数
 K =  N^2*4;    %照射パターン数
-maskD = N/10; %PDの受光範囲の直径
+maskD = N/1.5; %PDの受光範囲の直径
 
 %SGDの設定
 num_epoch = 100;  %エポック数
@@ -24,7 +24,7 @@ num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %複素振幅画像を生成（N×N）
-obj = gpuArray(double(MyRect(N,N/2))) ;
+obj = gpuArray(double(MyRect(N,N/3))) ;
 %{
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
@@ -35,17 +35,18 @@ obj = obj.*exp(1i*2*pi*rot90(obj));
 %}
 
 %サポート
-sup =gpuArray(double(MyRect(N, N)));
+sup =gpuArray(double(MyRect(N, N/2)));
 
 %アンテナ位置を表す行列（N×N）
 %array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9');
 %array = gpuArray(double(randomarray));
 load('Costasarray_N101.mat') ;
-array = gpuArray(double(matrix));%for Costasアレイ
+array = matrix;
+%array = gpuArray(double(matrix));%for Costasアレイ
 
 %位相シフトKパターン（N×N×K）
-phi = array.*rand(N,N,K,'double','gpuArray')*2*pi; 
+phi = array.*rand(N,N,K)*2*pi; 
 
 %アンテナ配置×位相シフト（N×N×K）
 A = array.*exp(1i*phi); 
@@ -74,7 +75,7 @@ batch_es = zeros(num_itr,1,'double','gpuArray');
 m_O = zeros(N,'double','gpuArray');
 v_O = zeros(N,'double','gpuArray');
 alpha_O = 1e-1;
-beta_1_O = 0.97;
+beta_1_O = 0.98;
 beta_2_O = 0.999;
 epsilon_O = 1e-8;
 
