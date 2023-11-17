@@ -15,11 +15,11 @@ gpurng(0);
 M = 10;     %uniformアレイの1辺の長さ
 N = 101;    %アンテナ数
 K =  N^2*4;    %照射パターン数
-maskD = N/1.5; %PDの受光範囲の直径
+maskD = N/2; %PDの受光範囲の直径
 
 %SGDの設定
 num_epoch = 100;  %エポック数
-batch_size = 2^6; %バッチサイズ
+batch_size = 2^8; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
@@ -31,7 +31,7 @@ img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
 obj = gpuArray(double(obj.*MyRect(N, N)));
-obj = obj.*exp(1i*2*pi*rot90(obj));
+obj = obj.*exp(1i*(2*pi*rot90(obj)+pi)).*MyRect(N,N/1.5);
 %}
 
 %サポート
@@ -42,11 +42,11 @@ sup =gpuArray(double(MyRect(N, N/2)));
 %load('random_array_9');
 %array = gpuArray(double(randomarray));
 load('Costasarray_N101.mat') ;
-array = matrix;
-%array = gpuArray(double(matrix));%for Costasアレイ
+%array = matrix;
+array = gpuArray(double(matrix));%for Costasアレイ
 
 %位相シフトKパターン（N×N×K）
-phi = array.*rand(N,N,K)*2*pi; 
+phi = array.*rand(N,N,K,'double','gpuArray')*2*pi; 
 
 %アンテナ配置×位相シフト（N×N×K）
 A = array.*exp(1i*phi); 
@@ -68,6 +68,7 @@ S = reshape(S, [K,1]);
 %ここから逆問題
 figure(100);
 O_hat = ones(N,'double','gpuArray'); %Oの初期値（N×N）
+%r_hat = r;
 r_hat = array.*rand(N,'double','gpuArray')*2*pi; %rの初期値（N×N）
 batch_es = zeros(num_itr,1,'double','gpuArray');
 
@@ -90,8 +91,9 @@ epsilon_r = 1e-8;
 %beta = 1e-4; %rの更新幅
 
 %TVの初期パラメタ
+%% 
 %rho_O = 0;
-rho_O = 6e3; 
+rho_O = 6e2; 
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 5; %TVの反復数
@@ -110,7 +112,7 @@ for epoch = 1:num_epoch
         itr = itr + 1;
 
         batch_idx = data_indice(batch_start:min(batch_start+batch_size-1, K));
-        batch_A = A(:,:,batch_idx);
+        batch_A = gpuArray(double(A(:,:,batch_idx)));
         batch_F = MyFFT2(batch_A.*exp(1i*r_hat));
         batch_I = MyIFFT2(batch_F.*O_hat); 
         batch_S_hat = reshape(sum(abs(batch_I).^2.*mask, [1,2]),[length(batch_idx),1]); 
@@ -127,8 +129,8 @@ for epoch = 1:num_epoch
         
         %O,rの更新
         O_hat = (O_hat - st_O).*sup; %Oの更新式
-        r_hat = r_hat - real(st_r) ; %rの更新式
-    
+        r_hat = r_hat - real(st_r); %rの更新式
+
         %v,uの更新
         v_TV_O_re = reshape(MyTVpsi_ND(real(O_hat + u_TV_O), tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
         v_TV_O_im = reshape(MyTVpsi_ND(imag(O_hat + u_TV_O), tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
