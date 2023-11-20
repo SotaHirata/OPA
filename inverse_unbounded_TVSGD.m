@@ -98,7 +98,7 @@ v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
 
 %non-negative constraint
-mu = 1e6;
+mu = 1e8;
 
 elapsed_times = zeros(floor(num_itr/100), 1);
 itr = 0;
@@ -117,11 +117,13 @@ for epoch = 1:num_epoch
         batch_es(itr) = mean(abs(batch_e).^2, 'all');
 
         %non-negative constraint
-        O_neg = zeros(N,'double','gpuArray');
-        O_neg(O_hat<0) = -1;
+        ReLU_O = -O_hat;
+        ReLU_O(O_hat>0) = 0;
+        dReLU_O = zeros(N,'double','gpuArray');
+        dReLU_O(O_hat<0) = -1;
     
         %O,rの勾配
-        st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O)) + mu*O_neg;
+        st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O)) + 2*mu*dReLU_O.*ReLU_O;
         st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(batch_A).*MyIFFT2(batch_F.*O_hat.*reshape(batch_e, [1,1,length(batch_idx)])),3);
             
         %Adam
