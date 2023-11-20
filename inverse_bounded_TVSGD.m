@@ -13,26 +13,26 @@ gpurng(0);
 
 %パラメタ
 M = 10;     %uniformアレイの1辺の長さ
-N = 101;    %アンテナ数
+N = 77;    %アンテナ数
 K =  N^2*4;    %照射パターン数
 maskD = N/2; %PDの受光範囲の直径
 
 %SGDの設定
-num_epoch = 100;  %エポック数
-batch_size = 2^8; %バッチサイズ
+num_epoch = 3000;  %エポック数
+batch_size = 2^10; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %複素振幅画像を生成（N×N）
-obj = gpuArray(double(MyRect(N,N/3))) ;
-%{
+obj = gpuArray(double(MyRect(N,N/4))) ;
+
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
 obj = gpuArray(double(obj.*MyRect(N, N)));
-obj = obj.*exp(1i*(2*pi*rot90(obj)+pi)).*MyRect(N,N/1.5);
-%}
+obj = obj.*exp(1i*(2*pi*rot90(obj)+pi)).*MyRect(N,N/2);
+
 
 %サポート
 sup =gpuArray(double(MyRect(N, N/2)));
@@ -41,7 +41,7 @@ sup =gpuArray(double(MyRect(N, N/2)));
 %array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9');
 %array = gpuArray(double(randomarray));
-load('Costasarray_N101.mat') ;
+load('Costasarray_N77.mat') ;
 %array = matrix;
 array = gpuArray(double(matrix));%for Costasアレイ
 
@@ -98,7 +98,7 @@ tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 5; %TVの反復数
 
-v_TV_O =  ones(N,'double','gpuArray');
+v_TV_O = ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
 
 %経過時間計算用

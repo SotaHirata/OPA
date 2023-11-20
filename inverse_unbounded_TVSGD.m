@@ -18,7 +18,7 @@ K = N^2*5;    %照射パターン数
 
 %SGDの設定
 num_epoch = 100;  %エポック数
-batch_size = 2^7; %バッチサイズ
+batch_size = 2^6; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
