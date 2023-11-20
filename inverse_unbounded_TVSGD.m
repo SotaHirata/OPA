@@ -13,17 +13,17 @@ gpurng(0);
 
 %パラメタ
 M = 10;     %uniformアレイの1辺の長さ
-N = 101;    %アンテナ数
-K = N^2*5;    %照射パターン数
+N = 127;    %アンテナ数
+K = N^2*4;    %照射パターン数
 
 %SGDの設定
-num_epoch = 100;  %エポック数
-batch_size = 2^6; %バッチサイズ
+num_epoch = 200;  %エポック数
+batch_size = 2^8; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %強度分布画像を生成（N×N）
-obj = gpuArray(double(MyRect(N,N/2))) ;
+obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ;
 %{
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
@@ -39,7 +39,7 @@ sup =gpuArray(double(MyRect(N, N/1.5)));
 %array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9.mat') ;
 %array = gpuArray(double(randomarray));
-load('Costasarray_N101.mat') ;
+load('Costasarray_N127.mat') ;
 array = matrix;
 %array = gpuArray(double(matrix));%for Costasアレイ
 
@@ -89,13 +89,16 @@ epsilon_r = 1e-8;
 
 %TVの初期パラメタ
 %rho_O = 0; %TVなし
-rho_O = 6e6; %TVあり
+rho_O = 6e8; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
 
 v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
+
+%non-negative constraint
+mu = 1e6;
 
 elapsed_times = zeros(floor(num_itr/100), 1);
 itr = 0;
@@ -112,9 +115,13 @@ for epoch = 1:num_epoch
         batch_S_hat = reshape(sum(abs(batch_F).^2.*O_hat, [1,2]), [length(batch_idx),1]);
         batch_e = batch_S_hat - S(batch_idx);
         batch_es(itr) = mean(abs(batch_e).^2, 'all');
+
+        %non-negative constraint
+        O_neg = zeros(N,'double','gpuArray');
+        O_neg(O_hat<0) = -1;
     
         %O,rの勾配
-        st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O));
+        st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O)) + mu*O_neg;
         st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(batch_A).*MyIFFT2(batch_F.*O_hat.*reshape(batch_e, [1,1,length(batch_idx)])),3);
             
         %Adam
