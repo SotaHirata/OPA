@@ -17,20 +17,20 @@ N = 127;    %アンテナ数
 K = N^2*4;    %照射パターン数
 
 %SGDの設定
-num_epoch = 200;  %エポック数
+num_epoch = 60;  %エポック数
 batch_size = 2^8; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %強度分布画像を生成（N×N）
-obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ;
-%{
+%obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ;
+
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
-obj = gpuArray(double(obj.*MyRect(N, N)));
-%}
+obj = gpuArray(double(obj.*MyRect(N, N/1.5)));
+
 
 %サポート
 sup =gpuArray(double(MyRect(N, N/1.5)));
@@ -73,23 +73,23 @@ batch_es = zeros(num_itr,1,'double','gpuArray');
 m_O = zeros(N,'double','gpuArray');
 v_O = zeros(N,'double','gpuArray');
 alpha_O = 1e-1;
-beta_1_O = 0.98;
+beta_1_O = 0.99;
 beta_2_O = 0.999;
 epsilon_O = 1e-8;
 
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
 alpha_r = 1e-1;
-beta_1_r = 0.98;
+beta_1_r = 0.99;
 beta_2_r = 0.999;
 epsilon_r = 1e-8;
 
 %alpha = 1e-8; %Oの更新幅
 %beta = 1e-6; %rの更新幅
 
-%TVの初期パラメタ
-%rho_O = 0; %TVなし
-rho_O = 6e8; %TVあり
+%TVの初期parameter
+rho_O = 0; %TVなし
+%rho_O = 1e-3; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -97,8 +97,9 @@ tv_iter = 4; %TVの反復数
 v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
 
-%non-negative constraint
-mu = 1e8;
+%0<O<1 constraint
+mu1 = 1e8; %for non-negative constraint
+mu2 = 1e8; %for O<=1 constraint
 
 elapsed_times = zeros(floor(num_itr/100), 1);
 itr = 0;
@@ -117,13 +118,19 @@ for epoch = 1:num_epoch
         batch_es(itr) = mean(abs(batch_e).^2, 'all');
 
         %non-negative constraint
-        ReLU_O = -O_hat;
-        ReLU_O(O_hat>0) = 0;
-        dReLU_O = zeros(N,'double','gpuArray');
-        dReLU_O(O_hat<0) = -1;
-    
+        ReLU1_O = -O_hat;
+        ReLU1_O(O_hat>0) = 0;
+        dReLU1_O = zeros(N, 'double','gpuArray');
+        dReLU1_O(O_hat<0) = -1;
+
+        %O<=1 constraint
+        ReLU2_O = O_hat - 1;
+        ReLU2_O(O_hat<1) = 0;
+        dReLU2_O = zeros(N, 'double','gpuArray');
+        dReLU2_O(O_hat>=1) = 1;
+
         %O,rの勾配
-        st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O)) + 2*mu*dReLU_O.*ReLU_O;
+        st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O)) + 2*mu1*dReLU1_O.*ReLU1_O + 2*mu2*dReLU2_O.*ReLU2_O;
         st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(batch_A).*MyIFFT2(batch_F.*O_hat.*reshape(batch_e, [1,1,length(batch_idx)])),3);
             
         %Adam
