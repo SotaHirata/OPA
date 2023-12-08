@@ -23,7 +23,7 @@ num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %batch列を用意
 
 %強度分布画像を生成（N×N）
-%obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ;
+%obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) +MyRect(N,[N/2,N/7],[N/2,2*N/3]))) 
 
 img = imread('peppers.png');
 img_resized = imresize(img, [N, N]);
