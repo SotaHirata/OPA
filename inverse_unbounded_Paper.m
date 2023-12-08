@@ -7,16 +7,16 @@ gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpu
 
 %サイズ
 M = 10;     %uniformアレイの1辺の長さ
-N = 77;    %アンテナ数
+N = 41;    %アンテナ数
 
 %計測回数
 min_k = N^2*4;      % 開始値
-max_k = N^2*6;     % 終了値
+max_k = N^2*12;     % 終了値
 stride = N^2*2;     % 間隔
 num_measurements = min_k:stride:max_k;
 
 %実験回数
-num_exp = 2;
+num_exp = 10;
 
 %オリジナル画像
 %{
@@ -34,7 +34,7 @@ sup =gpuArray(double(MyRect(N, sup_size)));
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni' %for uniformアレイ
-load('Costasarray_N77.mat') ; array = matrix; array_name = 'Cos';
+load('Costasarray_N41.mat') ; array = matrix; array_name = 'Cos';
 
 %ADAMのパラメタ
 m_O = zeros(N,'double','gpuArray');
@@ -42,7 +42,7 @@ v_O = zeros(N,'double','gpuArray');
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
 
-alpha = 1e-1;
+alpha = 1e-2;
 beta_1 = 0.99;
 beta_2 = 0.999;
 epsilon = 1e-8;
@@ -62,12 +62,22 @@ mu = 1e8;
 %進捗表示用
 now = 0;
 
-for K = num_measurements    %計測回数Kループ
+%RMSEグラフ描画用
+RMSEs_o = zeros(lengt(num_measurements), 1);
+stds_o = zeros(lengt(num_measurements), 1);
+RMSEs_r = zeros(lengt(num_measurements), 1);
+stds_r = zeros(lengt(num_measurements), 1);
+
+for idx_K = 1:length(num_measurements)    %計測回数Kループ
+    K = num_measurements(idx_K);
+
     rng(0); gpurng(0);
+    RMSE_tmp_o = zeros(num_exp, 1); %平均・標準偏差計算
+    RMSE_tmp_r = zeros(num_exp, 1);
 
     %SGDの設定
-    num_epoch = 200;  
-    batch_size = 2^8; %バッチサイズ
+    num_epoch = 100;  
+    batch_size = 2^6; %バッチサイズ
     num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
     data_indice = randperm(K); %batch列を用意
 
@@ -216,7 +226,8 @@ for K = num_measurements    %計測回数Kループ
         RMSE_r = sqrt(sum((r_hat_flattened(:) - r(:)).^2)/N);
         
         % 結果の表示
-        figure('Position',[714 91 818 775]);
+        figure(2);
+        gcf.Position = [714 91 818 775];
         subplot(4,3,1)
         imagesc(obj); colormap gray; axis image; colorbar;
         title('Original object amplitude');
@@ -263,8 +274,40 @@ for K = num_measurements    %計測回数Kループ
 
         finishMessage = sprintf('K=%d,seed=%dの結果を保存 (RMSE_o=%.4f, RMSE_r=%.4f)',K,seed,RMSE_o,RMSE_r);
         disp(finishMessage);
+
+        %RMSEを保存
+        RMSE_tmp_o(seed+1) = RMSE_o;
+        RMSE_tmp_r(seed+1) = RMSE_r;
     end
+
+    RMSEs_o(idx_K) = mean(RMSE_tmp_o);
+    stds_o(idx_K) = std(RMSE_tmp_o);
+    RMSEs_r(idx_K) = mean(RMSE_tmp_r);
+    stds_r(idx_K) = std(RMSE_tmp_r);
+
 end
+
+figure(3);
+subplot(1,2,1)
+errorbar(num_measurements,RMSEs_o,stds_o);
+title('RMSE of object');
+xlabel('Number of measurements');
+ylabel('Reconstruction RMSE');
+
+sublot(1,2,2)
+errorbar(num_measurements,RMSEs_r,stds_r);
+title('RMSE of phase bias');
+xlabel('Number of measurements');
+ylabel('Reconstruction RMSE');
+
+%ファイルを保存
+RMSE_path = './figures/RMSE/';
+mkdir(RMSE_path);
+RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_numE%d.fig',RMSE_path,array_name,obj_name,N,sup_size, num_exp);
+RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_numE%d.png',RMSE_path,array_name,obj_name,N,sup_size, num_exp);
+savefig(RMSE_fig);
+print(RMSE_png, '-dpng', '-r300');
+
 
 clearvars matrix img img_gray 
 
