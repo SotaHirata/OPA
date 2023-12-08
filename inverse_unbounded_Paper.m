@@ -11,7 +11,7 @@ N = 77;    %アンテナ数
 
 %計測回数
 min_k = N^2*4;      % 開始値
-max_k = N^2*12;     % 終了値
+max_k = N^2*6;     % 終了値
 stride = N^2*2;     % 間隔
 num_measurements = min_k:stride:max_k;
 
@@ -66,7 +66,7 @@ for K = num_measurements    %計測回数Kループ
     rng(0); gpurng(0);
 
     %SGDの設定
-    num_epoch = 60;  %エポック数
+    num_epoch = 200;  %エポック数
     batch_size = 2^8; %バッチサイズ
     num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
     data_indice = randperm(K); %batch列を用意
@@ -168,7 +168,7 @@ for K = num_measurements    %計測回数Kループ
             
                     %イテレーションごとの所要時間
                     elapsed_time = toc;
-                    fprintf('イテレーション %d の経過時間: %f 秒\n', itr, elapsed_time);
+                    %fprintf('イテレーション %d の経過時間: %f 秒\n', itr, elapsed_time);
                     elapsed_times(hundreds) = elapsed_time;
                     if itr ~=num_itr
                       tic;
@@ -181,7 +181,7 @@ for K = num_measurements    %計測回数Kループ
         %objとO_hatの相互相関
         O_hat = real(O_hat); %念のため
         O_hat_flip = rot90(O_hat, 2);
-        corr_map = MyIFFT2(MyFFT2(obj) .* MyFFT2(O_hat_flip));
+        corr_map = real(MyIFFT2(MyFFT2(obj) .* MyFFT2(O_hat_flip)));
         
         %相互相関が最大となるindexを求め、O_hatのシフト量を求める
         [max_corr, max_corr_index] = max(corr_map(:));
