@@ -11,14 +11,15 @@ reset(gpuDevice(GPU_num));
 executionEnvironment = 'gpu';
 gpurng(0);
 
+
 %パラメタ
 M = 10;     %uniformアレイの1辺の長さ
-N = 101;    %アンテナ数
-K =  N^2*8;    %照射パターン数
+N = 127;    %アンテナ数
+K =  N^2*15;    %照射パターン数
 maskD = N/1.5; %PDの受光範囲の直径
 
 %SGDの設定
-num_epoch = 500;  %エポック数
+num_epoch = 600;  %エポック数
 batch_size = 2^8; %バッチサイズ
 num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
 data_indice = randperm(K); %prepare mini-batch indice
@@ -32,7 +33,7 @@ img_resized = imresize(img, [N, N]);
 img_gray = double(rgb2gray(img_resized)) ;
 obj = img_gray / max(img_gray(:));
 obj = gpuArray(double(obj.*MyRect(N, N)));
-obj = obj.*exp(1i*(2*pi*rot90(obj)+pi)).*MyRect(N,N/2);
+obj = obj.*exp(1i*(2*pi*rot90(obj)+pi)).*MyRect(N,N/3);
 
 
 
@@ -43,7 +44,7 @@ sup =gpuArray(double(MyRect(N, N/2)));
 %array = gpuArray(double(MyRect(N, M))); %for uniformアレイ
 %load('random_array_9');
 %array = gpuArray(double(randomarray));
-load('Costasarray_N101.mat') ;
+load('Costasarray_N127.mat') ;
 array = matrix;
 %array = gpuArray(double(matrix));%for Costasアレイ
 
@@ -78,15 +79,15 @@ batch_es = zeros(num_itr,1,'double','gpuArray');
 %adamの初期パラメタ
 m_O = zeros(N,'double','gpuArray');
 v_O = zeros(N,'double','gpuArray');
-alpha_O = 1e-2;
-beta_1_O = 0.98;
+alpha_O = 5e-3;
+beta_1_O = 0.99;
 beta_2_O = 0.999;
 epsilon_O = 1e-8;
 
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
-alpha_r = 1e-2;
-beta_1_r = 0.98;
+alpha_r = 5e-3;
+beta_1_r = 0.99;
 beta_2_r = 0.999;
 epsilon_r = 1e-8;
 
