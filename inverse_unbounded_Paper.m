@@ -66,7 +66,7 @@ for K = num_measurements    %計測回数Kループ
     rng(0); gpurng(0);
 
     %SGDの設定
-    num_epoch = 200;  %エポック数
+    num_epoch = 200;  
     batch_size = 2^8; %バッチサイズ
     num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
     data_indice = randperm(K); %batch列を用意
@@ -239,14 +239,14 @@ for K = num_measurements    %計測回数Kループ
         
         subplot(4,3,8)
         imagesc(r_hat_flattened); colormap gray; axis image; colorbar; clim([0, 2*pi]);
-        title(['Corrected phase bias (RMSE',num2str(RMSE_r, 4), ')']);
+        title(['Corrected phase bias (RMSE=',num2str(RMSE_r, 4), ')']);
         
         subplot(4,3,10)
         imagesc(corr_map); colormap gray; axis image; colorbar;
         title('Correlation map');
         
         subplot(4,3,[11,12])
-        semilogy(es(1:itr));
+        semilogy(batch_es(1:itr));
         title(['|S_{hat} - S|^2  (', num2str(sum(elapsed_times)/hundreds,4),'sec/100itr)']);
 
         drawnow();
