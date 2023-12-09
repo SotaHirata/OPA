@@ -18,6 +18,9 @@ num_measurements = min_k:stride:max_k;
 %実験回数
 num_exp = 10;
 
+%limit iteration
+max_itr = 1e5;
+
 %オリジナル画像
 %{
 img = imread('peppers.png');
@@ -34,7 +37,7 @@ sup =gpuArray(double(MyRect(N, sup_size)));
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni' %for uniformアレイ
-load('Costasarray_N41.mat') ; array = matrix; array_name = 'Cos';
+load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
 
 %ADAMのパラメタ
 m_O = zeros(N,'double','gpuArray');
@@ -43,15 +46,15 @@ m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
 
 alpha = 1e-2;
-beta_1 = 0.99;
+beta_1 = 0.95;
 beta_2 = 0.999;
 epsilon = 1e-8;
 
 %TVのパラメタ
 v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
-rho_O = 0; %TVなし
-%rho_O = 1e-3; %TVあり
+%rho_O = 0; %TVなし
+rho_O = 1e-3; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -63,10 +66,10 @@ mu = 1e8;
 now = 0;
 
 %RMSEグラフ描画用
-RMSEs_o = zeros(lengt(num_measurements), 1);
-stds_o = zeros(lengt(num_measurements), 1);
-RMSEs_r = zeros(lengt(num_measurements), 1);
-stds_r = zeros(lengt(num_measurements), 1);
+RMSEs_o = zeros(length(num_measurements), 1);
+stds_o = zeros(length(num_measurements), 1);
+RMSEs_r = zeros(length(num_measurements), 1);
+stds_r = zeros(length(num_measurements), 1);
 
 for idx_K = 1:length(num_measurements)    %計測回数Kループ
     K = num_measurements(idx_K);
@@ -76,18 +79,18 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSE_tmp_r = zeros(num_exp, 1);
 
     %SGDの設定
-    num_epoch = 100;  
-    batch_size = 2^6; %バッチサイズ
+    num_epoch = 500;  
+    batch_size = 2^5; %バッチサイズ
     num_itr = (ceil(K/batch_size))*num_epoch; %反復回数
     data_indice = randperm(K); %batch列を用意
 
     %位相シフトKパターン（N×N×K）
-    phi = array.*rand(N,N,K)*2*pi;
-    %phi = array.*rand(N,N,K,'double','gpuArray')*2*pi;
+    %phi = array.*rand(N,N,K)*2*pi;
+    phi = array.*rand(N,N,K,'double','gpuArray')*2*pi;
     
     %アンテナ配置×位相シフト（N×N×K）
-    A = array.*exp(1i*phi);
-    %A = array.*gpuArray(double(exp(1i*phi))); 
+    %A = array.*exp(1i*phi);
+    A = array.*gpuArray(double(exp(1i*phi))); 
 
     for seed = 0:(num_exp-1) %位相バイアス複数通り試して標準偏差を取る
         %進捗を表示
@@ -105,7 +108,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
             batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*gpuArray(double(exp(1i*r))));
             S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
         end
-        S = reshape(S, [K,1]);  
+        S = reshape(S, [K,1]);
+        S = awgn(S,60,'measured');
         clearvars batch_F
 
         %ここから逆問題
@@ -183,7 +187,17 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                     if itr ~=num_itr
                       tic;
                     end 
+
                 end
+
+                if itr == max_itr
+                    break;
+                end
+
+            end
+
+            if itr == max_itr
+                break;
             end
         end
         
@@ -196,8 +210,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %相互相関が最大となるindexを求め、O_hatのシフト量を求める
         [max_corr, max_corr_index] = max(corr_map(:));
         [max_corr_row, max_corr_col] = ind2sub(size(corr_map), max_corr_index);
-        rows_shift = max_corr_row - floor(N/2);
-        cols_shift = max_corr_col - floor(N/2);
+        rows_shift = max_corr_row - ceil(N/2);
+        cols_shift = max_corr_col - ceil(N/2);
         
         %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正、また0〜2piにラッピング 
         [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
@@ -285,6 +299,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSEs_r(idx_K) = mean(RMSE_tmp_r);
     stds_r(idx_K) = std(RMSE_tmp_r);
 
+    clearvars phi A data_indice
 end
 
 figure(3);
