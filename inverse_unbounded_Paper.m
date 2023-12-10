@@ -302,6 +302,9 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
+RMSE_path = './figures/RMSE/';
+mkdir(RMSE_path);
+
 figure(3);
 subplot(1,2,1)
 errorbar(num_measurements,RMSEs_o,stds_o);
@@ -309,20 +312,17 @@ title('RMSE of object');
 xlabel('Number of measurements');
 ylabel('Reconstruction RMSE');
 
-sublot(1,2,2)
+subplot(1,2,2)
 errorbar(num_measurements,RMSEs_r,stds_r);
 title('RMSE of phase bias');
 xlabel('Number of measurements');
 ylabel('Reconstruction RMSE');
 
-%ファイルを保存
-RMSE_path = './figures/RMSE/';
-mkdir(RMSE_path);
+%???????
 RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_numE%d.fig',RMSE_path,array_name,obj_name,N,sup_size, num_exp);
 RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_numE%d.png',RMSE_path,array_name,obj_name,N,sup_size, num_exp);
 savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
-
 
 clearvars matrix img img_gray 
 
