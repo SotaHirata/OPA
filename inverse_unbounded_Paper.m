@@ -18,6 +18,9 @@ num_measurements = min_k:stride:max_k;
 %実験回数
 num_exp = 10;
 
+%noiseLevel
+noiseLv = 30;
+
 %limit iteration
 max_itr = 1e5;
 
@@ -32,12 +35,13 @@ obj = gpuArray(double(obj.*MyRect(N, N/1.5))); obj_name = 'peppers';
 obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
 
 %サポート
-sup_size = ceil(N/1.5);
+%sup_size = ceil(N/1.5);
+sup_size = N;
 sup =gpuArray(double(MyRect(N, sup_size)));
 
 %アンテナ配置
-%array = gpuArray(double(MyRect(N, M))); array_name = 'Uni' %for uniformアレイ
-load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
+array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
+%load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
 
 %ADAMのパラメタ
 m_O = zeros(N,'double','gpuArray');
@@ -109,7 +113,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
             S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
         end
         S = reshape(S, [K,1]);
-        S = awgn(S,60,'measured');
+        S = awgn(S,noiseLv,'measured');
         clearvars batch_F
 
         %ここから逆問題
@@ -277,7 +281,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures/M2_%s_%s_N%d_K%d_sup%d/',array_name,obj_name,N,K,sup_size);
+        save_dir = sprintf('./figures/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -319,8 +323,8 @@ xlabel('Number of measurements');
 ylabel('Reconstruction RMSE');
 
 %???????
-RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_numE%d.fig',RMSE_path,array_name,obj_name,N,sup_size, num_exp);
-RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_numE%d.png',RMSE_path,array_name,obj_name,N,sup_size, num_exp);
+RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.fig',RMSE_path,array_name,obj_name,N,sup_size,noiseLv,num_exp);
+RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.png',RMSE_path,array_name,obj_name,N,sup_size,noiseLv,num_exp);
 savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
 
