@@ -6,8 +6,8 @@ GPU_num = 4;
 gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
 %サイズ
-M = 10;     %uniformアレイの1辺の長さ
-N = 41;    %アンテナ数
+M = 7;     %uniformアレイの1辺の長さ
+N = M^2;    %アンテナ数
 
 %計測回数
 min_k = N^2*4;      % 開始値
@@ -22,7 +22,7 @@ num_exp = 10;
 noiseLv = 30;
 
 %limit iteration
-max_itr = 1e5;
+max_itr = 1e4;
 
 %オリジナル画像
 %{
@@ -58,7 +58,7 @@ epsilon = 1e-8;
 v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
 %rho_O = 0; %TVなし
-rho_O = 1e-3; %TVあり
+rho_O = 5e-3; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -89,12 +89,12 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     data_indice = randperm(K); %batch列を用意
 
     %位相シフトKパターン（N×N×K）
-    %phi = array.*rand(N,N,K)*2*pi;
-    phi = array.*rand(N,N,K,'double','gpuArray')*2*pi;
+    phi = array.*rand(N,N,K)*2*pi;
+    %phi = array.*rand(N,N,K,'double','gpuArray')*2*pi;
     
     %アンテナ配置×位相シフト（N×N×K）
-    %A = array.*exp(1i*phi);
-    A = array.*gpuArray(double(exp(1i*phi))); 
+    A = array.*exp(1i*phi);
+    %A = array.*gpuArray(double(exp(1i*phi))); 
 
     for seed = 0:(num_exp-1) %位相バイアス複数通り試して標準偏差を取る
         %進捗を表示
@@ -104,7 +104,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
         %位相バイアス（N×N）
         rng(seed); gpurng(seed);
-        r = array.*rand(N,N,'double','gpuArray')*2*pi; 
+        r = array.*(rand(N,N,'double','gpuArray')*2*pi*3/4 + 1/4*pi); 
         
         %PDの観測強度（K×1配列）
         S = zeros(1,K,'double','gpuArray');
@@ -281,7 +281,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures2/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -306,7 +306,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures/RMSE/';
+RMSE_path = './figures2/RMSE/';
 mkdir(RMSE_path);
 
 figure(3);
