@@ -6,7 +6,7 @@ GPU_num = 4;
 gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
 %サイズ
-M = 7;     %uniformアレイの1辺の長さ
+M = 10;     %uniformアレイの1辺の長さ
 N = M^2;    %アンテナ数
 
 %計測回数
@@ -22,7 +22,7 @@ num_exp = 10;
 noiseLv = 30;
 
 %limit iteration
-max_itr = 1e4;
+max_itr = 2e4;
 
 %オリジナル画像
 %{
@@ -40,7 +40,8 @@ sup_size = N;
 sup =gpuArray(double(MyRect(N, sup_size)));
 
 %アンテナ配置
-array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
+%array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
+array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
 %load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
 
 %ADAMのパラメタ
@@ -104,7 +105,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
         %位相バイアス（N×N）
         rng(seed); gpurng(seed);
-        r = array.*(rand(N,N,'double','gpuArray')*2*pi*3/4 + 1/4*pi); 
+        %r = array.*(rand(N,N,'double','gpuArray')*2*pi*3/4 + 1/4*pi); 
+        r = array.*(rand(N,N,'double','gpuArray')*2*pi);
         
         %PDの観測強度（K×1配列）
         S = zeros(1,K,'double','gpuArray');
@@ -241,7 +243,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         
         %RMSEの計算
         RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
-        RMSE_r = sqrt(sum((r_hat_flattened(:) - r(:)).^2)/N);
+        RMSE_r = sqrt(sum(abs(exp(1i*r_hat_flattened(:)) - exp(1i*r(:))).^2)/N);
         
         % 結果の表示
         figure(2);
@@ -281,7 +283,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures2/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures3/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -306,7 +308,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures2/RMSE/';
+RMSE_path = './figures3/RMSE/';
 mkdir(RMSE_path);
 
 figure(3);
