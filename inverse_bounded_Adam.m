@@ -19,7 +19,7 @@ sup = MyRect(N, N/2);
 %sup = MyRect(N, N);
 
 %アンテナ位置を表す行列（N×N）
-array = MyRect(N, M); %for uniformアレイ
+%array = MyRect(N, M); %for uniformアレイ
 %load('random_array_0.mat') ;
 %array = randomarray;
 load('Costasarray_N16.mat') ;
@@ -140,46 +140,67 @@ for itr = 1:num_itr
     end
 end
 
-%abs(obj)とabs(O_hat)の相互相関を計算
+[row, col] = find(sup ~= 0);
+O_hat_onSup = O_hat(row(1):row(end), col(1):col(end));
+obj_onSup = obj(row(1):row(end), col(1):col(end));
+
+O_hat_onSup_flip = rot90(abs(O_hat_onSup), 2);
+corr_map = MyIFFT2(MyFFT2(abs(obj_onSup)) .* MyFFT2(O_hat_onSup_flip));
+
+%{
+abs(obj)とabs(O_hat)の相互相関を計算
 O_hat_flip = rot90(abs(O_hat), 2);
 corr_map = MyIFFT2(MyFFT2(abs(obj)) .* MyFFT2(O_hat_flip));
+%}
 
 %相互相関が最大となるindexを求め、O_hatのシフト量を求める
 [max_corr, max_corr_index] = max(corr_map(:));
 [max_corr_row, max_corr_col] = ind2sub(size(corr_map), max_corr_index);
-rows_shift = max_corr_row - floor(N/2);
-cols_shift = max_corr_col - floor(N/2);
+rows_shift = max_corr_row - ceil(length(corr_map)/2) ;
+cols_shift = max_corr_col - ceil(length(corr_map)/2) ;
 
 %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正、また0〜2piにラッピング 
 [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
 r_hat_shifted = (r_hat + 2*pi.*rows_shift.*meshy./N + 2*pi.*cols_shift.*meshx./N).*array;
-r_hat_flattened = wrapTo2Pi(angle(exp(1i.*r_hat_shifted)));
+%r_hat_flattened = wrapTo2Pi(angle(exp(1i.*r_hat_shifted)));
+exp_r_hat_shifted = exp(1i*r_hat_shifted);
+%上の1行なくても、dif_angle = wrapTo2Pi(r-r_hat_shifted)でよい。
 
 %上記で求めたシフト量からO_hatを補正
 %（前処理1）support領域だけO_hatを切り取り（for support内の巡回）
+
+%{
 [row, col] = find(sup ~= 0);
 supportRegion = O_hat(row(1):row(end), col(1):col(end));
 
 %support領域のO_hatをシフト
 supportRegionShifted = circshift(supportRegion, [rows_shift, cols_shift]);
+%}
+O_hat_onSup = circshift(O_hat_onSup, [rows_shift, cols_shift]);
 
 %外側を0paddingしてsupport付き画像に戻す
 O_hat_shifted = zeros(N);
-O_hat_shifted(row(1):row(end), col(1):col(end)) = supportRegionShifted;
+O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup;
 
 %angle(O_hat)の定数加算量を推定し補正
 dif_angle = angle(obj) - wrapTo2Pi(angle(O_hat_shifted.*abs(obj)));
 angle_shift = sum(dif_angle(:))/nnz(abs(obj));
 O_hat_shifted = O_hat_shifted.*exp(1i*angle_shift);
 
+
 %r_hatの定数加算量を推定し位相を補正
+exp_dif_bias = exp(1i*(r - r_hat_shifted));
+bias_offset = sum(angle(exp_dif_bias(:)))/N;
+exp_r_hat_flattened = exp(1i*(r_hat_shifted +bias_offset).*array);
+%{
 dif_bias = wrapTo2Pi(r - r_hat_flattened);
 bias_shift = sum(dif_bias(:))/N;
-r_hat_flattened = wrapTo2Pi((r_hat_flattened() + bias_shift).*array);
+r_hat_flattened = wrapTo2Pi((r_hat_flattened + bias_shift).*array);
+%}
 
 %RMSEの計算
 RMSE_o = sqrt(mean(abs(O_hat_shifted(:) - obj(:)).^2));
-RMSE_r = sqrt(sum((r_hat_flattened(:) - r(:)).^2)/N);
+RMSE_r = sqrt(sum(abs(exp_r_hat_flattened(:) - exp(1i*r(:))).^2)/N);
 %peaksnr = psnr(abs(O_hat),abs(obj));
 
 % 結果の表示
@@ -217,7 +238,7 @@ imagesc(wrapTo2Pi(angle(O_hat_shifted))); colormap gray; axis image; colorbar; c
 title('Compensated phase');
 
 subplot(4,3,9)
-imagesc(r_hat_flattened); colormap gray; axis image; colorbar; clim([0, 2*pi]);
+imagesc(wrapTo2Pi(angle(exp_r_hat_flattened))); colormap gray; axis image; colorbar; clim([0, 2*pi]);
 title('Compensated phase bias');
 
 subplot(4,3,10)

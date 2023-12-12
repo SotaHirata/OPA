@@ -6,23 +6,23 @@ GPU_num = 4;
 gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
 %サイズ
-M = 10;     %uniformアレイの1辺の長さ
-N = M^2;    %アンテナ数
+M = 7;     %uniformアレイの1辺の長さ
+N = 41;    %アンテナ数
 
 %計測回数
 min_k = N^2*4;      % 開始値
-max_k = N^2*12;     % 終了値
+max_k = N^2*4;     % 終了値
 stride = N^2*2;     % 間隔
 num_measurements = min_k:stride:max_k;
 
-%実験回数
-num_exp = 10;
+%ランダムな位相バイアス（N×N）の枚数
+num_phafse_bias = 10;
 
 %noiseLevel
-noiseLv = 30;
+noiseLv = 60;
 
 %limit iteration
-max_itr = 2e4;
+max_itr = 4e4;
 
 %オリジナル画像
 %{
@@ -43,6 +43,9 @@ sup =gpuArray(double(MyRect(N, sup_size)));
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
 array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
 %load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
+
+%位相バイアスのリスト
+phase_biases = array.*(rand(N,N,num_phafse_bias,'double','gpuArray')*2*pi);
 
 %ADAMのパラメタ
 m_O = zeros(N,'double','gpuArray');
@@ -79,9 +82,8 @@ stds_r = zeros(length(num_measurements), 1);
 for idx_K = 1:length(num_measurements)    %計測回数Kループ
     K = num_measurements(idx_K);
 
-    rng(0); gpurng(0);
-    RMSE_tmp_o = zeros(num_exp, 1); %平均・標準偏差計算
-    RMSE_tmp_r = zeros(num_exp, 1);
+    RMSE_tmp_o = zeros(num_phase_bias, 1); %平均・標準偏差計算
+    RMSE_tmp_r = zeros(num_phase_bias, 1);
 
     %SGDの設定
     num_epoch = 500;  
@@ -97,16 +99,14 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     A = array.*exp(1i*phi);
     %A = array.*gpuArray(double(exp(1i*phi))); 
 
-    for seed = 0:(num_exp-1) %位相バイアス複数通り試して標準偏差を取る
+    for seed = 0:(num_phase_bias-1) %位相バイアス複数通り試して標準偏差を取る
         %進捗を表示
         now = now + 1;
-        progress = sprintf('K=%d,seed=%dを計算中（%d/%d)', K,seed,now,length(num_measurements)*num_exp);
+        progress = sprintf('K=%d,seed=%dを計算中（%d/%d)', K,seed,now,length(num_measurements)*num_phase_bias);
         disp(progress);
 
         %位相バイアス（N×N）
-        rng(seed); gpurng(seed);
-        %r = array.*(rand(N,N,'double','gpuArray')*2*pi*3/4 + 1/4*pi); 
-        r = array.*(rand(N,N,'double','gpuArray')*2*pi);
+        r = phase_biases(:,:,seed+1);
         
         %PDの観測強度（K×1配列）
         S = zeros(1,K,'double','gpuArray');
@@ -208,42 +208,40 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         end
         
         %ここから品質評価
-        %objとO_hatの相互相関
         O_hat = real(O_hat); %念のため
-        O_hat_flip = rot90(O_hat, 2);
-        corr_map = real(MyIFFT2(MyFFT2(obj) .* MyFFT2(O_hat_flip)));
+
+        %サポート上のobjとO_hatの相互相関
+        [row, col] = find(sup ~= 0);
+        O_hat_onSup = O_hat(row(1):row(end), col(1):col(end));
+        obj_onSup = obj(row(1):row(end), col(1):col(end));
+        O_hat_onSup_flip = rot90(O_hat_onSup, 2);
+        corr_map = MyIFFT2(MyFFT2(obj_onSup) .* MyFFT2(O_hat_onSup_flip));
         
-        %相互相関が最大となるindexを求め、O_hatのシフト量を求める
+        %相互相関が最大となるindexを求め、サポート上のO_hatのシフト量を求める
         [max_corr, max_corr_index] = max(corr_map(:));
         [max_corr_row, max_corr_col] = ind2sub(size(corr_map), max_corr_index);
-        rows_shift = max_corr_row - ceil(N/2);
-        cols_shift = max_corr_col - ceil(N/2);
-        
-        %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正、また0〜2piにラッピング 
-        [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
-        r_hat_shifted = (r_hat + 2*pi.*rows_shift.*meshy./N + 2*pi.*cols_shift.*meshx./N).*array;
-        r_hat_flattened = wrapTo2Pi(angle(exp(1i.*r_hat_shifted)));
-        
-        %上記で求めたシフト量からO_hatを補正
-        %（前処理1）support領域だけO_hatを切り取り（for support内の巡回）
-        [row, col] = find(sup ~= 0);
-        supportRegion = O_hat(row(1):row(end), col(1):col(end));
-        
-        %support領域のO_hatをシフト
-        supportRegionShifted = circshift(supportRegion, [rows_shift, cols_shift]);
-        
+        rows_shift = max_corr_row - ceil(length(corr_map)/2) ;
+        cols_shift = max_corr_col - ceil(length(corr_map)/2) ;
+
+        %サポート上のO_hatをシフト
+        O_hat_onSup = circshift(O_hat_onSup, [rows_shift, cols_shift]);
+
         %外側を0paddingしてsupport付き画像に戻す
         O_hat_shifted = zeros(N);
-        O_hat_shifted(row(1):row(end), col(1):col(end)) = supportRegionShifted;
+        O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup;
+                
+        %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正 
+        [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
+        r_hat_shifted = (r_hat + 2*pi.*rows_shift.*meshy./N + 2*pi.*cols_shift.*meshx./N).*array;
         
-        %r_hatの定数加算量を推定し位相を補正
-        dif_bias = wrapTo2Pi(r - r_hat_flattened);
-        bias_shift = sum(dif_bias(:))/N;
-        r_hat_flattened = wrapTo2Pi((r_hat_flattened() + bias_shift).*array);
+        %r_hatのオフセット量を推定し位相を補正
+        exp_dif_bias = exp(1i*(r - r_hat_shifted));
+        bias_offset = sum(angle(exp_dif_bias(:)))/N;
+        exp_r_hat_corrected = exp(1i*(r_hat_shifted +bias_offset).*array);
         
         %RMSEの計算
         RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
-        RMSE_r = sqrt(sum(abs(exp(1i*r_hat_flattened(:)) - exp(1i*r(:))).^2)/N);
+        RMSE_r = sqrt(sum(abs(exp_r_hat_corrected(:) - exp(1i*r(:))).^2)/N);
         
         % 結果の表示
         figure(2);
@@ -269,7 +267,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         title(['Corrected amplitude (RMSE=',num2str(RMSE_o, 4), ')']);
         
         subplot(4,3,8)
-        imagesc(r_hat_flattened); colormap gray; axis image; colorbar; clim([0, 2*pi]);
+        imagesc(wrapTo2Pi(angle(exp_r_hat_corrected))); colormap gray; axis image; colorbar; clim([0, 2*pi]);
         title(['Corrected phase bias (RMSE=',num2str(RMSE_r, 4), ')']);
         
         subplot(4,3,10)
@@ -283,7 +281,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures3/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures4/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -308,7 +306,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures3/RMSE/';
+RMSE_path = './figures4/RMSE/';
 mkdir(RMSE_path);
 
 figure(3);
@@ -324,9 +322,9 @@ title('RMSE of phase bias');
 xlabel('Number of measurements');
 ylabel('Reconstruction RMSE');
 
-%???????
-RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.fig',RMSE_path,array_name,obj_name,N,sup_size,noiseLv,num_exp);
-RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.png',RMSE_path,array_name,obj_name,N,sup_size,noiseLv,num_exp);
+%RMSEのグラフを保存
+RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.fig',RMSE_path,array_name,obj_name,N,sup_size,noiseLv,num_phase_bias);
+RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.png',RMSE_path,array_name,obj_name,N,sup_size,noiseLv,num_phase_bias);
 savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
 
