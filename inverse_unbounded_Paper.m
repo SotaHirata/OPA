@@ -16,13 +16,13 @@ stride = N^2*2;     % 間隔
 num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
-num_phafse_bias = 10;
+num_phase_bias = 10;
 
 %noiseLevel
 noiseLv = 60;
 
 %limit iteration
-max_itr = 4e4;
+max_itr = 2e4;
 
 %オリジナル画像
 %{
@@ -35,17 +35,17 @@ obj = gpuArray(double(obj.*MyRect(N, N/1.5))); obj_name = 'peppers';
 obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
 
 %サポート
-%sup_size = ceil(N/1.5);
-sup_size = N;
+sup_size = ceil(N/1.5);
+%sup_size = N;
 sup =gpuArray(double(MyRect(N, sup_size)));
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
-array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
-%load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
+%array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
+load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
 
 %位相バイアスのリスト
-phase_biases = array.*(rand(N,N,num_phafse_bias,'double','gpuArray')*2*pi);
+phase_biases = array.*(rand(N,N,num_phase_bias,'double','gpuArray')*2*pi);
 
 %ADAMのパラメタ
 m_O = zeros(N,'double','gpuArray');
@@ -53,7 +53,7 @@ v_O = zeros(N,'double','gpuArray');
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
 
-alpha = 1e-2;
+alpha = 2e-2;
 beta_1 = 0.95;
 beta_2 = 0.999;
 epsilon = 1e-8;
@@ -215,7 +215,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         O_hat_onSup = O_hat(row(1):row(end), col(1):col(end));
         obj_onSup = obj(row(1):row(end), col(1):col(end));
         O_hat_onSup_flip = rot90(O_hat_onSup, 2);
-        corr_map = MyIFFT2(MyFFT2(obj_onSup) .* MyFFT2(O_hat_onSup_flip));
+        corr_map = real(MyIFFT2(MyFFT2(obj_onSup) .* MyFFT2(O_hat_onSup_flip)));
         
         %相互相関が最大となるindexを求め、サポート上のO_hatのシフト量を求める
         [max_corr, max_corr_index] = max(corr_map(:));
