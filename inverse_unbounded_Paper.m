@@ -34,13 +34,15 @@ num_epoch = 500; %エポック数（今回はmax_itrで停止するので無関�
 sup_size = ceil(N/1.5);
 %sup_size = N;
 sup =gpuArray(double(MyRect(N, sup_size)));
+[row, col] = find(sup ~= 0); %サポート領域のインデックス
 
 %オリジナル画像
 img = imread('peppers_color.png');
-img_gray =  double(rgb2gray(imresize(img, [N, N])));
-obj = img_gray / max(img_gray(:));
-obj = gpuArray(double(obj.*MyRect(N, N))); obj_name = 'peppers';
-
+img_gray =  double(rgb2gray(imresize(img, [sup_size, sup_size])));
+img_gray_normalized = img_gray / max(img_gray(:));
+obj = zeros(N);
+obj(row(1):row(end), col(1):col(end)) = img_gray_normalized;
+obj = gpuArray(double(obj)); obj_name = 'peppers';
 %obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
 %obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
 
@@ -237,7 +239,6 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
             O_hat = real(O_hat); %念のため
     
             %サポート上のobjとO_hatの相互相関
-            [row, col] = find(sup ~= 0);
             O_hat_onSup = O_hat(row(1):row(end), col(1):col(end));
             obj_onSup = obj(row(1):row(end), col(1):col(end));
             O_hat_onSup_flip = rot90(O_hat_onSup, 2);
