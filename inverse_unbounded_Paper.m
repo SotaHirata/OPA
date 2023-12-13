@@ -6,7 +6,7 @@ GPU_num = 4;
 gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
 M = 10;     %uniformアレイの1辺の長さ
-N = M^2;    %アンテナ数
+N = 101;    %アンテナ数
 
 %計測回数
 min_k = N^2*4;      % 開始値
@@ -30,25 +30,25 @@ max_itr = 2e4;
 batch_size = 2^8; %バッチサイズ
 num_epoch = 500; %エポック数（今回はmax_itrで停止するので無関係. 十分大にしておく）
 
-%オリジナル画像
-%{
-img = imread('peppers_color.png');
-img_gray =  double(rgb2gray(imresize(img, [N, N])));
-obj = img_gray / max(img_gray(:));
-obj = gpuArray(double(obj.*MyRect(N, N/1.5))); obj_name = 'peppers';
-%}
-%obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
-obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
-
 %サポート
 sup_size = ceil(N/1.5);
 %sup_size = N;
 sup =gpuArray(double(MyRect(N, sup_size)));
 
+%オリジナル画像
+img = imread('peppers_color.png');
+img_gray =  double(rgb2gray(imresize(img, [N, N])));
+obj = img_gray / max(img_gray(:));
+obj = gpuArray(double(obj.*MyRect(N, N))); obj_name = 'peppers';
+
+%obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
+%obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
+
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
 %array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
-load('Costasarray_N41.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
+%load('Costasarray_N101.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
+load('Costasarray_N101.mat') ; array = matrix; array_name = 'Cos';
 
 %位相バイアスのリスト
 phase_biases = array.*(rand(N,N,num_phase_bias,'double','gpuArray')*2*pi);
