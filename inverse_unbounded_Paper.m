@@ -5,12 +5,12 @@ rng(0);
 GPU_num = 4;
 gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
-M = 7;     %uniformアレイの1辺の長さ
-N = 41;    %アンテナ数
+M = 10;     %uniformアレイの1辺の長さ
+N = M^2;    %アンテナ数
 
 %計測回数
-min_k = N^2*6;      % 開始値
-max_k = N^2*6;     % 終了値
+min_k = N^2*4;      % 開始値
+max_k = N^2*4;     % 終了値
 stride = N^2*2;     % 間隔
 num_measurements = min_k:stride:max_k;
 
@@ -18,21 +18,21 @@ num_measurements = min_k:stride:max_k;
 num_phase_bias = 10;
 
 %位相バイアス1つあたりの初期値数
-num_inits = 10;
+num_inits = 5;
 
 %AWGNのSN比
-noiseLv = 60;
+noiseLv = 30;
 
 %limit iteration
-max_itr = 3e4;
+max_itr = 2e4;
 
 %SGDの設定
-batch_size = 2^5; %バッチサイズ
+batch_size = 2^8; %バッチサイズ
 num_epoch = 500; %エポック数（今回はmax_itrで停止するので無関係. 十分大にしておく）
 
 %オリジナル画像
 %{
-img = imread('peppers.png');
+img = imread('peppers_color.png');
 img_gray =  double(rgb2gray(imresize(img, [N, N])));
 obj = img_gray / max(img_gray(:));
 obj = gpuArray(double(obj.*MyRect(N, N/1.5))); obj_name = 'peppers';
