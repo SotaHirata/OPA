@@ -9,8 +9,8 @@ M = 7;     %uniformアレイの1辺の長さ
 N = 41;    %アンテナ数
 
 %計測回数
-min_k = N^2*4;      % 開始値
-max_k = N^2*4;     % 終了値
+min_k = N^2*6;      % 開始値
+max_k = N^2*6;     % 終了値
 stride = N^2*2;     % 間隔
 num_measurements = min_k:stride:max_k;
 
@@ -18,13 +18,13 @@ num_measurements = min_k:stride:max_k;
 num_phase_bias = 10;
 
 %位相バイアス1つあたりの初期値数
-num_inits = 5;
+num_inits = 10;
 
 %AWGNのSN比
 noiseLv = 60;
 
 %limit iteration
-max_itr = 2e4;
+max_itr = 3e4;
 
 %SGDの設定
 batch_size = 2^5; %バッチサイズ
@@ -109,6 +109,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
     %位相バイアスnum_phase_bias通りにたいして再構成を試す
+    %for seed = 4:4
     for seed = 0:(num_phase_bias-1) 
         %位相バイアス（N×N）を設定
         r = phase_biases(:,:,seed+1);
@@ -126,20 +127,20 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %逆問題
         
         %記録保持用変数の初期化
-        RMSE_o_best = 0;
+        RMSE_o_best = 10000;
         RMSE_r_best = 10000; %十分大きく設定しておく
         O_hat_best = zeros(N,'double','gpuArray');
         r_hat_best = zeros(N,'double','gpuArray');
         O_hat_shifted_best = zeros(N);
         exp_r_hat_corrected_best = exp(1i*ones(N,'double','gpuArray'));
         corr_map_best = zeros(N);
-        batch_es_best(1:itr) = zeros(max_itr,1,'double','gpuArray');
+        batch_es_best = zeros(max_itr,1,'double','gpuArray');
 
         %初期値をnum_inits通り降って、最良のRMSE_rのケースを探索
         for trial = 1:num_inits
             %進捗を表示
             now = now + 1;
-            progress = sprintf('K=%d,seed=%d,trial=%d/%d を計算中（%d/%d)', K,seed,trial,num_inits,now,length(num_measurements)*num_phase_bias*num_inits);
+            progress = sprintf('K=%d,seed=%d,trial=%d を計算中（%d/%d), RMSE_o_best=%.4f, RMSE_r_best=%.4f', K,seed,trial,now,length(num_measurements)*num_phase_bias*num_inits, RMSE_o_best, RMSE_r_best);
             disp(progress);
 
             figure(1);
@@ -302,11 +303,11 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         
         subplot(4,3,7)
         imagesc(O_hat_shifted_best); colormap gray; axis image; colorbar;
-        title(['Corrected amplitude (RMSE=',num2str(RMSE_o, 4), ')']);
+        title(['Corrected amplitude (RMSE=',num2str(RMSE_o_best, 4), ')']);
         
         subplot(4,3,8)
         imagesc(wrapTo2Pi(angle(exp_r_hat_corrected_best))); colormap gray; axis image; colorbar; clim([0, 2*pi]);
-        title(['Corrected phase bias (RMSE=',num2str(RMSE_r, 4), ')']);
+        title(['Corrected phase bias (RMSE=',num2str(RMSE_r_best, 4), ')']);
         
         subplot(4,3,10)
         imagesc(corr_map_best); colormap gray; axis image; colorbar;
