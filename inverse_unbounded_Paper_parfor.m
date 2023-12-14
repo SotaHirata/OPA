@@ -1,9 +1,11 @@
 close all;
+delete(gcp('nocreate'))
 clear all;clc;
 
 rng(0); 
 %GPU_num = 4;
 %gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
+poolobj = parpool('Processes',5); %並列処理用
 
 M = 10;     %uniformアレイの1辺の長さ
 N = M^2;    %アンテナ数
@@ -15,7 +17,7 @@ stride = N^2*1;     % 間隔
 num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
-num_phase_bias = 5;
+num_phase_bias = 10;
 
 %位相バイアス1つあたりの初期値数
 num_inits = 5;
@@ -64,18 +66,12 @@ O_hat_inits = rand(N,N,num_inits); %Oの初期値のリスト
 r_hat_inits = array.*rand(N,N,num_inits)*2*pi; %rの初期値のリスト
 
 %ADAMのパラメタ
-m_O = zeros(N);
-v_O = zeros(N);
-m_r = zeros(N);
-v_r = zeros(N);
 alpha = 2e-2;
 beta_1 = 0.95;
 beta_2 = 0.999;
 epsilon = 1e-8;
 
 %TVのパラメタ
-v_TV_O =  ones(N);
-u_TV_O = zeros(N);
 %rho_O = 0; %TVなし
 rho_O = 1e-2; %TVあり
 tv_th = 1e-2;
@@ -130,27 +126,42 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %逆問題
         
         %最良推定値の保存変数の初期化
-        O_hat_best = zeros(N);
-        r_hat_best = zeros(N);
-        batch_es_best = zeros(max_itr,1);
-        batch_es_best(max_itr) = 1e10; %十分大きく設定しておく
+        %O_hat_best = zeros(N);
+        %r_hat_best = zeros(N);
+        %batch_es_best = zeros(max_itr,1);
+        %batch_es_best(max_itr) = 1e10; %十分大きく設定しておく
+
+        %各推定値の記録用
+        O_hat_results = zeros(N,N,num_inits);
+        r_hat_results = zeros(N,N,num_inits);
+        batch_es_results = zeros(max_itr,num_inits);
 
         %初期値をnum_inits通り降って、最良のRMSE_rのケースを探索
-        for trial = 1:num_inits
+        parfor trial = 1:num_inits
             %進捗を表示
-            now = now + 1;
-            progress = sprintf('K=%d,seed=%d,trial=%d を計算中（%d/%d) loss_best=%.3e', K,seed,trial,now,length(num_measurements)*num_phase_bias*num_inits,batch_es_best(max_itr));
+            %now = now + 1;
+            progress = sprintf('K=%d,seed=%d,trial=%d を計算中',K,seed,trial);
             disp(progress);
 
-            figure(1);
+            %figure(trial);
             O_hat = O_hat_inits(:,:,trial);
             r_hat = r_hat_inits(:,:,trial);
             batch_es = zeros(max_itr,1);
 
-            elapsed_times = zeros(floor(max_itr/100), 1);
-            itr = 0; hundreds = 0;
-            tic;
+            %elapsed_times = zeros(floor(max_itr/100), 1);
+            itr = 0; %hundreds = 0;
+            %tic;
     
+            %ADAMの初期化
+            m_O = zeros(N);
+            v_O = zeros(N);
+            m_r = zeros(N);
+            v_r = zeros(N);
+
+            %TVの初期化
+            v_TV_O =  ones(N);
+            u_TV_O = zeros(N);
+
             for epoch = 1:num_epoch
                 for batch_start = 1:batch_size:K %ミニバッチ
                     itr = itr + 1;
@@ -184,6 +195,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                     v_TV_O = reshape(MyTVpsi_ND(O_hat + u_TV_O, tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
                     u_TV_O = u_TV_O + (O_hat - v_TV_O);
                 
+                    %{
                     if rem(itr, 100)==0    %描画
                         hundreds = hundreds + 1;
     
@@ -218,6 +230,9 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                         end 
     
                     end %描画終わり
+                    %}
+                    
+                  
     
                     if itr == max_itr %max_itrに達したとき更新終了
                         break;
@@ -231,16 +246,28 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
             end 
 
+            O_hat_results(:,:,trial) = real(O_hat);
+            r_hat_results(:,:,trial) = r_hat;
+            batch_es_results(:,trial) = batch_es;
             %最終的なロス（forミニバッチ）が最小の場合、各推定値とロス推移を記録。
+            %{
             if batch_es(itr) < batch_es_best(itr)
                 O_hat_best = O_hat;
                 r_hat_best = r_hat;
                 batch_es_best(1:itr) = batch_es(1:itr);
             end
+            %}
         end %初期値を振ってのtrialループ終了
 
         %ここから品質評価
-        O_hat_best = real(O_hat_best); %念のため
+        batch_es_results_last = batch_es_results(max_itr,:);
+        [min_batch_es_last,best_index] = min(batch_es_results_last);
+
+        O_hat_best = O_hat_results(:,:,best_index);
+        r_hat_best = r_hat_results(:,:,best_index);
+        batch_es_best = batch_es_results(:,best_index);
+
+        %O_hat_best = real(O_hat_best); %念のため
 
         %サポート上のobjとO_hat_bestの相互相関
         O_hat_onSup = O_hat_best(row(1):row(end), col(1):col(end));
@@ -299,7 +326,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
 
         % 結果の表示
-        figure(2);
+        figure(100);
         gcf.Position = [714 91 818 775];
         subplot(4,3,1)
         imagesc(obj); colormap gray; axis image; colorbar;
@@ -330,7 +357,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         title('Correlation map');
         
         subplot(4,3,[11,12])
-        semilogy(batch_es_best(1:itr));
+        semilogy(batch_es_best(1:max_itr));
         title('|S_{hat} - S|^2');
 
         drawnow();
@@ -364,7 +391,7 @@ end
 RMSE_path = './figures6/RMSE/';
 mkdir(RMSE_path);
 
-figure(3);
+figure(1000);
 subplot(1,2,1)
 errorbar(num_measurements,RMSEs_o,stds_o);
 title('RMSE of object');
@@ -384,3 +411,10 @@ savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
 
 clearvars matrix img img_gray 
+delete(poolobj);
+
+
+
+
+
+
