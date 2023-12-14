@@ -10,12 +10,12 @@ N = M^2;    %アンテナ数
 
 %計測回数
 min_k = N^2*1;      % 開始値
-max_k = N^2*4;     % 終了値
+max_k = N^2*1;     % 終了値
 stride = N^2*1;     % 間隔
 num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
-num_phase_bias = 10;
+num_phase_bias = 5;
 
 %位相バイアス1つあたりの初期値数
 num_inits = 5;
@@ -253,7 +253,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
         %8近傍シフト時の最良補正値の保存変数の初期化
         RMSE_o_best = 0;
-        RMSE_r_best = 0; 
+        RMSE_r_best = 1000; 
         O_hat_shifted_best = zeros(N);
         exp_r_hat_corrected_best = exp(1i*ones(N,'double','gpuArray'));
 
@@ -286,7 +286,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
                 %RMSE_rが最小の時の各補正値を保持
                 if RMSE_r < RMSE_r_best
-                    RMSE_o_best = RMSE_r;
+                    RMSE_o_best = RMSE_o;
                     RMSE_r_best = RMSE_r;
                     O_hat_shifted_best = O_hat_shifted;
                     exp_r_hat_corrected_best = exp_r_hat_corrected;
