@@ -2,8 +2,8 @@ close all;
 clear all;clc;
 
 rng(0); 
-GPU_num = 4;
-gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
+%GPU_num = 4;
+%gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
 M = 10;     %uniformアレイの1辺の長さ
 N = M^2;    %アンテナ数
@@ -46,7 +46,8 @@ obj(row(1):row(end), col(1):col(end)) = img_gray_normalized;
 obj = gpuArray(double(obj)); obj_name = 'peppers';
 %}
 %obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
-obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
+%obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
+obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
@@ -55,25 +56,25 @@ array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
 %load('Costasarray_N101.mat') ; array = matrix; array_name = 'Cos';
 
 %位相バイアスのリスト
-phase_biases = array.*(rand(N,N,num_phase_bias,'double','gpuArray')*2*pi);
+phase_biases = array.*(rand(N,N,num_phase_bias)*2*pi);
 
 %初期値のリスト
-O_hat_inits = rand(N,N,num_inits,'double','gpuArray'); %Oの初期値のリスト
-r_hat_inits = array.*rand(N,N,num_inits,'double','gpuArray')*2*pi; %rの初期値のリスト
+O_hat_inits = rand(N,N,num_inits); %Oの初期値のリスト
+r_hat_inits = array.*rand(N,N,num_inits)*2*pi; %rの初期値のリスト
 
 %ADAMのパラメタ
-m_O = zeros(N,'double','gpuArray');
-v_O = zeros(N,'double','gpuArray');
-m_r = zeros(N,'double','gpuArray');
-v_r = zeros(N,'double','gpuArray');
+m_O = zeros(N);
+v_O = zeros(N);
+m_r = zeros(N);
+v_r = zeros(N);
 alpha = 2e-2;
 beta_1 = 0.95;
 beta_2 = 0.999;
 epsilon = 1e-8;
 
 %TVのパラメタ
-v_TV_O =  ones(N,'double','gpuArray');
-u_TV_O = zeros(N,'double','gpuArray');
+v_TV_O =  ones(N);
+u_TV_O = zeros(N);
 %rho_O = 0; %TVなし
 rho_O = 1e-2; %TVあり
 tv_th = 1e-2;
@@ -115,7 +116,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         r = phase_biases(:,:,seed);
         
         %順伝播:PDの観測強度（K×1）を計算
-        S = zeros(1,K,'double','gpuArray');
+        S = zeros(1,K);
         for batch_start = 1:batch_size:K
             batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*gpuArray(double(exp(1i*r))));
             S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
@@ -127,9 +128,9 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %逆問題
         
         %最良推定値の保存変数の初期化
-        O_hat_best = zeros(N,'double','gpuArray');
-        r_hat_best = zeros(N,'double','gpuArray');
-        batch_es_best = zeros(max_itr,1,'double','gpuArray');
+        O_hat_best = zeros(N);
+        r_hat_best = zeros(N);
+        batch_es_best = zeros(max_itr,1);
         batch_es_best(max_itr) = 1e10; %十分大きく設定しておく
 
         %初期値をnum_inits通り降って、最良のRMSE_rのケースを探索
@@ -142,7 +143,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
             figure(1);
             O_hat = O_hat_inits(:,:,trial);
             r_hat = r_hat_inits(:,:,trial);
-            batch_es = zeros(max_itr,1,'double','gpuArray');
+            batch_es = zeros(max_itr,1);
 
             elapsed_times = zeros(floor(max_itr/100), 1);
             itr = 0; hundreds = 0;
@@ -162,7 +163,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                     %非負ペナルティ
                     ReLU_O = -O_hat;
                     ReLU_O(O_hat>0) = 0;
-                    dReLU_O = zeros(N, 'double','gpuArray');
+                    dReLU_O = zeros(N);
                     dReLU_O(O_hat<0) = -1;
             
                     %O,rの勾配
@@ -255,7 +256,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         RMSE_o_best = 0;
         RMSE_r_best = 1000; 
         O_hat_shifted_best = zeros(N);
-        exp_r_hat_corrected_best = exp(1i*ones(N,'double','gpuArray'));
+        exp_r_hat_corrected_best = exp(1i*ones(N));
 
         %8近傍でRMSE_rが最小となるシフト量を探索
         for row_add = -1:1
