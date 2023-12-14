@@ -6,12 +6,12 @@ GPU_num = 4;
 gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
 
 M = 10;     %uniformアレイの1辺の長さ
-N = 101;    %アンテナ数
+N = M^2;    %アンテナ数
 
 %計測回数
-min_k = N^2*4;      % 開始値
+min_k = N^2*1;      % 開始値
 max_k = N^2*4;     % 終了値
-stride = N^2*2;     % 間隔
+stride = N^2*1;     % 間隔
 num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
@@ -24,33 +24,35 @@ num_inits = 5;
 noiseLv = 30;
 
 %limit iteration
-max_itr = 2e4;
+max_itr = 1e4;
 
 %SGDの設定
-batch_size = 2^8; %バッチサイズ
-num_epoch = 500; %エポック数（今回はmax_itrで停止するので無関係. 十分大にしておく）
+batch_size = 2^5; %バッチサイズ
+num_epoch = 1000; %エポック数（今回はmax_itrで停止するので無関係. 十分大にしておく）
 
 %サポート
-sup_size = ceil(N/1.5);
-%sup_size = N;
+%sup_size = ceil(N/1.5);
+sup_size = N;
 sup =gpuArray(double(MyRect(N, sup_size)));
 [row, col] = find(sup ~= 0); %サポート領域のインデックス
 
 %オリジナル画像
+%{
 img = imread('peppers_color.png');
 img_gray =  double(rgb2gray(imresize(img, [sup_size, sup_size])));
 img_gray_normalized = img_gray / max(img_gray(:));
 obj = zeros(N);
 obj(row(1):row(end), col(1):col(end)) = img_gray_normalized;
 obj = gpuArray(double(obj)); obj_name = 'peppers';
+%}
 %obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
-%obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
+obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
-%array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
+array = MyRect(N, M); array_name = 'Uni'; %for uniformアレイ
 %load('Costasarray_N101.mat') ; array = gpuArray(double(matrix)); array_name = 'Cos';
-load('Costasarray_N101.mat') ; array = matrix; array_name = 'Cos';
+%load('Costasarray_N101.mat') ; array = matrix; array_name = 'Cos';
 
 %位相バイアスのリスト
 phase_biases = array.*(rand(N,N,num_phase_bias,'double','gpuArray')*2*pi);
@@ -75,7 +77,7 @@ epsilon = 1e-8;
 v_TV_O =  ones(N,'double','gpuArray');
 u_TV_O = zeros(N,'double','gpuArray');
 %rho_O = 0; %TVなし
-rho_O = 5e-3; %TVあり
+rho_O = 1e-2; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
