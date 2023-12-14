@@ -4,8 +4,8 @@ if (nargin < 2), weights = 1; end
 
 n_size = size(x);
 n_size_TV_end = size(n_size, 2);
-TV = zeros([n_size n_size_TV_end],'double','gpuArray');
-
+%TV = zeros([n_size n_size_TV_end],'double','gpuArray');
+TV = zeros([n_size n_size_TV_end]);
 
 for k = 1 : n_size_TV_end
     

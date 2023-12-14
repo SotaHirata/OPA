@@ -33,7 +33,8 @@ num_epoch = 1000; %エポック数（今回はmax_itrで停止するので無関
 %サポート
 %sup_size = ceil(N/1.5);
 sup_size = N;
-sup =gpuArray(double(MyRect(N, sup_size)));
+%sup =gpuArray(double(MyRect(N, sup_size)));
+sup =MyRect(N, sup_size);
 [row, col] = find(sup ~= 0); %サポート領域のインデックス
 
 %オリジナル画像
@@ -118,7 +119,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %順伝播:PDの観測強度（K×1）を計算
         S = zeros(1,K);
         for batch_start = 1:batch_size:K
-            batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*gpuArray(double(exp(1i*r))));
+            %batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*gpuArray(double(exp(1i*r))));
+            batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*exp(1i*r));
             S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
         end
         S = reshape(S, [K,1]);

@@ -4,8 +4,10 @@ if (nargin < 5), weights = 1; end
 
 n_size = size(g);
 n_size_TV_end = size(n_size, 2);
-pn = zeros([n_size n_size_TV_end],'double','gpuArray');
-div_pn = zeros(n_size,'double','gpuArray');
+%pn = zeros([n_size n_size_TV_end],'double','gpuArray');
+%div_pn = zeros(n_size,'double','gpuArray');
+pn = zeros([n_size n_size_TV_end]);
+div_pn = zeros(n_size);
 
 
 for i = 1 : iter
