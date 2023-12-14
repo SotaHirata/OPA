@@ -61,13 +61,11 @@ phase_biases = array.*(rand(N,N,num_phase_bias,'double','gpuArray')*2*pi);
 O_hat_inits = rand(N,N,num_inits,'double','gpuArray'); %Oの初期値のリスト
 r_hat_inits = array.*rand(N,N,num_inits,'double','gpuArray')*2*pi; %rの初期値のリスト
 
-
 %ADAMのパラメタ
 m_O = zeros(N,'double','gpuArray');
 v_O = zeros(N,'double','gpuArray');
 m_r = zeros(N,'double','gpuArray');
 v_r = zeros(N,'double','gpuArray');
-
 alpha = 2e-2;
 beta_1 = 0.95;
 beta_2 = 0.999;
@@ -87,7 +85,6 @@ mu = 1e8;
 
 %進捗表示用
 now = 0;
-
 %RMSEグラフ描画用
 RMSEs_o = zeros(length(num_measurements), 1);
 stds_o = zeros(length(num_measurements), 1);
@@ -113,10 +110,9 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
     %位相バイアスnum_phase_bias通りにたいして再構成を試す
-    %for seed = 4:4
-    for seed = 0:(num_phase_bias-1) 
+    for seed = 1:num_phase_bias 
         %位相バイアス（N×N）を設定
-        r = phase_biases(:,:,seed+1);
+        r = phase_biases(:,:,seed);
         
         %順伝播:PDの観測強度（K×1）を計算
         S = zeros(1,K,'double','gpuArray');
@@ -130,21 +126,17 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
         %逆問題
         
-        %記録保持用変数の初期化
-        RMSE_o_best = 10000;
-        RMSE_r_best = 10000; %十分大きく設定しておく
+        %最良推定値の保存変数の初期化
         O_hat_best = zeros(N,'double','gpuArray');
         r_hat_best = zeros(N,'double','gpuArray');
-        O_hat_shifted_best = zeros(N);
-        exp_r_hat_corrected_best = exp(1i*ones(N,'double','gpuArray'));
-        corr_map_best = zeros(N);
         batch_es_best = zeros(max_itr,1,'double','gpuArray');
+        batch_es_best(max_itr) = 1e10; %十分大きく設定しておく
 
         %初期値をnum_inits通り降って、最良のRMSE_rのケースを探索
         for trial = 1:num_inits
             %進捗を表示
             now = now + 1;
-            progress = sprintf('K=%d,seed=%d,trial=%d を計算中（%d/%d), RMSE_o_best=%.4f, RMSE_r_best=%.4f', K,seed,trial,now,length(num_measurements)*num_phase_bias*num_inits, RMSE_o_best, RMSE_r_best);
+            progress = sprintf('K=%d,seed=%d,trial=%d を計算中（%d/%d) loss_best=%.3e', K,seed,trial,now,length(num_measurements)*num_phase_bias*num_inits,batch_es_best(max_itr));
             disp(progress);
 
             figure(1);
@@ -236,55 +228,73 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
 
             end 
 
-           
-            %ここから品質評価
-            O_hat = real(O_hat); %念のため
-    
-            %サポート上のobjとO_hatの相互相関
-            O_hat_onSup = O_hat(row(1):row(end), col(1):col(end));
-            obj_onSup = obj(row(1):row(end), col(1):col(end));
-            O_hat_onSup_flip = rot90(O_hat_onSup, 2);
-            corr_map = real(MyIFFT2(MyFFT2(obj_onSup) .* MyFFT2(O_hat_onSup_flip)));
-            
-            %相互相関が最大となるindexを求め、サポート上のO_hatのシフト量を求める
-            [max_corr, max_corr_index] = max(corr_map(:));
-            [max_corr_row, max_corr_col] = ind2sub(size(corr_map), max_corr_index);
-            rows_shift = max_corr_row - ceil(length(corr_map)/2) ;
-            cols_shift = max_corr_col - ceil(length(corr_map)/2) ;
-    
-            %サポート上のO_hatをシフト
-            O_hat_onSup = circshift(O_hat_onSup, [rows_shift, cols_shift]);
-    
-            %外側を0paddingしてsupport付き画像に戻す
-            O_hat_shifted = zeros(N);
-            O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup;
-                    
-            %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正 
-            [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
-            r_hat_shifted = (r_hat + 2*pi.*rows_shift.*meshy./N + 2*pi.*cols_shift.*meshx./N).*array;
-            
-            %r_hatのオフセット量を推定し位相を補正
-            exp_dif_bias = exp(1i*(r - r_hat_shifted));
-            bias_offset = sum(angle(exp_dif_bias(:)))/N;
-            exp_r_hat_corrected = exp(1i*(r_hat_shifted +bias_offset).*array);
-            
-            %RMSEの計算
-            RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
-            RMSE_r = sqrt(sum(abs(exp_r_hat_corrected(:) - exp(1i*r(:))).^2)/N);
-
-            %位相バイアスのRMSEが最小の場合の各推定値を保持。
-            if RMSE_r < RMSE_r_best
-                RMSE_o_best = RMSE_o;
-                RMSE_r_best = RMSE_r;
+            %最終的なロス（forミニバッチ）が最小の場合、各推定値とロス推移を記録。
+            if batch_es(itr) < batch_es_best(itr)
                 O_hat_best = O_hat;
                 r_hat_best = r_hat;
-                O_hat_shifted_best = O_hat_shifted;
-                exp_r_hat_corrected_best = exp_r_hat_corrected;
-                corr_map_best = corr_map;
                 batch_es_best(1:itr) = batch_es(1:itr);
             end
-        end
+        end %初期値を振ってのtrialループ終了
+
+        %ここから品質評価
+        O_hat_best = real(O_hat_best); %念のため
+
+        %サポート上のobjとO_hat_bestの相互相関
+        O_hat_onSup = O_hat_best(row(1):row(end), col(1):col(end));
+        obj_onSup = obj(row(1):row(end), col(1):col(end));
+        O_hat_onSup_flip = rot90(O_hat_onSup, 2);
+        corr_map = real(MyIFFT2(MyFFT2(obj_onSup) .* MyFFT2(O_hat_onSup_flip)));
         
+        %相互相関が最大となるindexを求め、サポート上のO_hat_bestのシフト量を求める
+        [max_corr, max_corr_index] = max(corr_map(:));
+        [max_corr_row, max_corr_col] = ind2sub(size(corr_map), max_corr_index);
+        rows_shift = max_corr_row - ceil(length(corr_map)/2) ;
+        cols_shift = max_corr_col - ceil(length(corr_map)/2) ;
+
+        %8近傍シフト時の最良補正値の保存変数の初期化
+        RMSE_o_best = 0;
+        RMSE_r_best = 0; 
+        O_hat_shifted_best = zeros(N);
+        exp_r_hat_corrected_best = exp(1i*ones(N,'double','gpuArray'));
+
+        %8近傍でRMSE_rが最小となるシフト量を探索
+        for row_add = -1:1
+            for col_add = -1:1
+                %row_shift, col_shiftを8近傍にシフト
+                rows_shift_added = rows_shift + row_add;
+                cols_shift_added = cols_shift + col_add;
+
+                %サポート上のO_hatをシフト
+                O_hat_onSup = circshift(O_hat_onSup, [rows_shift_added, cols_shift_added]);
+        
+                %外側を0paddingしてsupport付き画像に戻す
+                O_hat_shifted = zeros(N);
+                O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup;
+                        
+                %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正 
+                [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
+                r_hat_shifted = (r_hat_best + 2*pi.*rows_shift_added.*meshy./N + 2*pi.*cols_shift_added.*meshx./N).*array;
+                
+                %r_hatのオフセット量を推定し位相を補正
+                exp_dif_bias = exp(1i*(r - r_hat_shifted));
+                bias_offset = sum(angle(exp_dif_bias(:)))/N;
+                exp_r_hat_corrected = exp(1i*(r_hat_shifted +bias_offset).*array);
+                
+                %RMSEの計算
+                RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
+                RMSE_r = sqrt(sum(abs(exp_r_hat_corrected(:) - exp(1i*r(:))).^2)/N);
+
+                %RMSE_rが最小の時の各補正値を保持
+                if RMSE_r < RMSE_r_best
+                    RMSE_o_best = RMSE_r;
+                    RMSE_r_best = RMSE_r;
+                    O_hat_shifted_best = O_hat_shifted;
+                    exp_r_hat_corrected_best = exp_r_hat_corrected;
+                end
+            end
+        end
+
+
         % 結果の表示
         figure(2);
         gcf.Position = [714 91 818 775];
@@ -313,17 +323,17 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         title(['Corrected phase bias (RMSE=',num2str(RMSE_r_best, 4), ')']);
         
         subplot(4,3,10)
-        imagesc(corr_map_best); colormap gray; axis image; colorbar;
+        imagesc(corr_map); colormap gray; axis image; colorbar;
         title('Correlation map');
         
         subplot(4,3,[11,12])
         semilogy(batch_es_best(1:itr));
-        title(['|S_{hat} - S|^2  (', num2str(sum(elapsed_times)/hundreds,4),'sec/100itr)']);
+        title('|S_{hat} - S|^2');
 
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures5/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures6/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -332,12 +342,12 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         savefig(filename_fig);
         print(filename_png, '-dpng', '-r300');
 
-        finishMessage = sprintf('K=%d,seed=%dの結果を保存 (RMSE_o=%.4f, RMSE_r=%.4f)',K,seed,RMSE_o_best,RMSE_r_best);
+        finishMessage = sprintf('K=%d,seed=%dの結果を保存 (RMSE_o_best=%.4f, RMSE_r_best=%.4f)',K,seed,RMSE_o_best,RMSE_r_best);
         disp(finishMessage);
 
         %RMSEを保存
-        RMSE_tmp_o(seed+1) = RMSE_o_best;
-        RMSE_tmp_r(seed+1) = RMSE_r_best;
+        RMSE_tmp_o(seed) = RMSE_o_best;
+        RMSE_tmp_r(seed) = RMSE_r_best;
     end
 
     RMSEs_o(idx_K) = mean(RMSE_tmp_o);
@@ -348,7 +358,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures5/RMSE/';
+RMSE_path = './figures6/RMSE/';
 mkdir(RMSE_path);
 
 figure(3);
@@ -371,7 +381,6 @@ savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
 
 clearvars matrix img img_gray 
-
 
 
 
