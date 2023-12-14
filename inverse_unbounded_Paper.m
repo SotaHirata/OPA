@@ -10,12 +10,12 @@ N = M^2;    %アンテナ数
 
 %計測回数
 min_k = N^2*1;      % 開始値
-max_k = N^2*1;     % 終了値
+max_k = N^2*4;     % 終了値
 stride = N^2*1;     % 間隔
-num_measurements = min_k:stride:max_k;
+num_measurements = [min_k/10,min_k/2, min_k:stride:max_k];
 
 %ランダムな位相バイアス（N×N）の枚数
-num_phase_bias = 5;
+num_phase_bias = 10;
 
 %位相バイアス1つあたりの初期値数
 num_inits = 5;
@@ -268,11 +268,11 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                 cols_shift_added = cols_shift + col_add;
 
                 %サポート上のO_hatをシフト
-                O_hat_onSup = circshift(O_hat_onSup, [rows_shift_added, cols_shift_added]);
+                O_hat_onSup_shift = circshift(O_hat_onSup, [rows_shift_added, cols_shift_added]);
         
                 %外側を0paddingしてsupport付き画像に戻す
                 O_hat_shifted = zeros(N);
-                O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup;
+                O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup_shift;
                         
                 %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正 
                 [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
