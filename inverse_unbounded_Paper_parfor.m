@@ -314,9 +314,11 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                 r_hat_shifted = (r_hat_best + 2*pi.*rows_shift_added.*meshy./N + 2*pi.*cols_shift_added.*meshx./N).*array;
                 
                 %r_hatのオフセット量を推定し位相を補正
-                exp_dif_bias = exp(1i*(r - r_hat_shifted));
+                %exp_dif_bias = exp(1i*(r - r_hat_shifted));
+                exp_dif_bias = exp(1i*r)./exp(1i*r_hat_shifted);
                 bias_offset = sum(angle(exp_dif_bias(:)))/N;
-                exp_r_hat_corrected = exp(1i*(r_hat_shifted +bias_offset).*array);
+                %exp_r_hat_corrected = exp(1i*(r_hat_shifted +bias_offset).*array);
+                exp_r_hat_corrected = exp(1i*(r_hat_shifted)).*exp(1i*bias_offset).*array;
                 
                 %RMSEの計算
                 RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
@@ -388,6 +390,17 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %RMSEを保存
         RMSE_tmp_o(seed) = RMSE_o_best;
         RMSE_tmp_r(seed) = RMSE_r_best;
+
+        %debug
+        if K==5000 && seed==4
+            break;
+        end
+
+    end
+
+    %debug
+    if K==5000 && seed==4
+        break;
     end
 
     RMSEs_o(idx_K) = mean(RMSE_tmp_o);
