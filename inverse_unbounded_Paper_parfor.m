@@ -15,6 +15,8 @@ min_k = N^2*1;      % 開始値
 max_k = N^2*4;     % 終了値
 stride = N^2*1;     % 間隔
 num_measurements = [min_k/5,min_k/2,min_k:stride:max_k];
+%num_measurements = N^2*2
+%num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
 num_phase_bias = 10;
@@ -108,6 +110,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
     %位相バイアスnum_phase_bias通りにたいして再構成を試す
+    %for seed = 5:5
     for seed = 1:num_phase_bias 
         %位相バイアス（N×N）を設定
         r = phase_biases(:,:,seed);
@@ -286,10 +289,12 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         RMSE_r_best = 1000; 
         O_hat_shifted_best = zeros(N);
         exp_r_hat_corrected_best = exp(1i*ones(N));
+        row_add_best = 0;
+        col_add_best = 0;
 
         %8近傍でRMSE_rが最小となるシフト量を探索
-        for row_add = -1:1
-            for col_add = -1:1
+        for row_add = -4:4
+            for col_add = -4:4
                 %row_shift, col_shiftを8近傍にシフト
                 rows_shift_added = rows_shift + row_add;
                 cols_shift_added = cols_shift + col_add;
@@ -320,6 +325,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                     RMSE_r_best = RMSE_r;
                     O_hat_shifted_best = O_hat_shifted;
                     exp_r_hat_corrected_best = exp_r_hat_corrected;
+                    row_add_best = row_add;
+                    col_add_best = col_add;
                 end
             end
         end
@@ -363,7 +370,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures6/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures7/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -372,7 +379,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         savefig(filename_fig);
         print(filename_png, '-dpng', '-r300');
 
-        finishMessage = sprintf('K=%d,seed=%dの結果を保存 (RMSE_o_best=%.4f, RMSE_r_best=%.4f)',K,seed,RMSE_o_best,RMSE_r_best);
+        finishMessage = sprintf('K=%d,seed=%dの結果を保存 (RMSE_o_best=%.4f, RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',K,seed,RMSE_o_best,RMSE_r_best,row_add_best,col_add_best);
         disp(finishMessage);
 
         %RMSEを保存
@@ -388,7 +395,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures6/RMSE/';
+RMSE_path = './figures7/RMSE/';
 mkdir(RMSE_path);
 
 figure(1000);
