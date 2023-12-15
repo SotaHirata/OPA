@@ -14,7 +14,7 @@ N = M^2;    %アンテナ数
 min_k = N^2*1;      % 開始値
 max_k = N^2*4;     % 終了値
 stride = N^2*1;     % 間隔
-num_measurements = [min_k/5,min_k/2,min_k:stride:max_k];
+num_measurements = [min_k/4,min_k/2,min_k:stride:max_k];
 %num_measurements = N^2*4;
 %num_measurements = min_k:stride:max_k;
 
