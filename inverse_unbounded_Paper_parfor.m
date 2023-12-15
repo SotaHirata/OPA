@@ -15,7 +15,7 @@ min_k = N^2*1;      % 開始値
 max_k = N^2*4;     % 終了値
 stride = N^2*1;     % 間隔
 num_measurements = [min_k/5,min_k/2,min_k:stride:max_k];
-%num_measurements = N^2*2
+%num_measurements = N^2*4;
 %num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
@@ -53,9 +53,9 @@ obj = gpuArray(double(obj)); obj_name = 'peppers';
 %obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
 %obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
 %obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
-image_gray = phantom('Modified Shepp-Logan',sup_size)+0.1; image_gray_normalized = image_gray/(max(image_gray(:)));
+image_gray = phantom('Modified Shepp-Logan',sup_size)+0.2; image_gray_normalized = image_gray/(max(image_gray(:)));
 obj = zeros(N);
-obj(row(1):row(end), col(1):col(end)) = img_gray_normalized; obj_name = 'phantom';
+obj(row(1):row(end), col(1):col(end)) = image_gray_normalized; obj_name = 'phantom';
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
@@ -78,7 +78,7 @@ epsilon = 1e-8;
 
 %TVのパラメタ
 %rho_O = 0; %TVなし
-rho_O = 1e-2; %TVあり
+rho_O = 5e-2; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -296,8 +296,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         col_add_best = 0;
 
         %8近傍でRMSE_rが最小となるシフト量を探索
-        for row_add = -4:4
-            for col_add = -4:4
+        for row_add = -2:2
+            for col_add = -2:2
                 %row_shift, col_shiftを8近傍にシフト
                 rows_shift_added = rows_shift + row_add;
                 cols_shift_added = cols_shift + col_add;
@@ -373,7 +373,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures7/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures8/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -398,7 +398,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures7/RMSE/';
+RMSE_path = './figures8/RMSE/';
 mkdir(RMSE_path);
 
 figure(1000);
