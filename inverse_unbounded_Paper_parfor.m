@@ -52,7 +52,10 @@ obj = gpuArray(double(obj)); obj_name = 'peppers';
 %}
 %obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
 %obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
-obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
+%obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
+image_gray = phantom('Modified Shepp-Logan',sup_size)+0.1; image_gray_normalized = image_gray/(max(image_gray(:)));
+obj = zeros(N);
+obj(row(1):row(end), col(1):col(end)) = img_gray_normalized; obj_name = 'phantom';
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
