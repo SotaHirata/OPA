@@ -295,7 +295,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         row_add_best = 0;
         col_add_best = 0;
 
-        %8近傍でRMSE_rが最小となるシフト量を探索
+        %24近傍でRMSE_rが最小となるシフト量を探索
         for row_add = -2:2
             for col_add = -2:2
                 %row_shift, col_shiftを8近傍にシフト
@@ -315,14 +315,30 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                 
                 %r_hatのオフセット量を推定し位相を補正
                 %exp_dif_bias = exp(1i*(r - r_hat_shifted));
-                exp_dif_bias = exp(1i*r)./exp(1i*r_hat_shifted);
-                bias_offset = sum(angle(exp_dif_bias(:)))/N;
+                %bias_offset = sum(angle(exp_dif_bias(:)))/N;
                 %exp_r_hat_corrected = exp(1i*(r_hat_shifted +bias_offset).*array);
-                exp_r_hat_corrected = exp(1i*(r_hat_shifted)).*exp(1i*bias_offset).*array;
                 
+                %for [0,2pi]
+                dif_bias_1 =  wrapTo2Pi(r - wrapTo2Pi(r_hat_shifted));
+                bias_offset_1 = sum(dif_bias_1(:))/N;
+                exp_r_hat_corrected_1 = exp(1i*(r_hat_shifted +bias_offset_1).*array);
+                %for [-pi,pi]
+                dif_bias_2 = r - wrapTo2Pi(r_hat_shifted);
+                bias_offset_2 = sum(dif_bias_2(:))/N;
+                exp_r_hat_corrected_2 = exp(1i*(r_hat_shifted +bias_offset_2).*array);
+
                 %RMSEの計算
                 RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
-                RMSE_r = sqrt(sum(abs(exp_r_hat_corrected(:) - exp(1i*r(:))).^2)/N);
+                RMSE_r_1 = sqrt(sum(abs(exp_r_hat_corrected_1(:) - exp(1i*r(:))).^2)/N);
+                RMSE_r_2 = sqrt(sum(abs(exp_r_hat_corrected_2(:) - exp(1i*r(:))).^2)/N);
+
+                if RMSE_r_1 < RMSE_r_2
+                    RMSE_r = RMSE_r_1;
+                    exp_r_hat_corrected = exp_r_hat_corrected_1;
+                else
+                    RMSE_r = RMSE_r_2;
+                    exp_r_hat_corrected = exp_r_hat_corrected_2;
+                end
 
                 %RMSE_rが最小の時の各補正値を保持
                 if RMSE_r < RMSE_r_best
@@ -335,7 +351,6 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                 end
             end
         end
-
 
         % 結果の表示
         figure(100);
@@ -375,7 +390,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures8/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures9/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -392,16 +407,16 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         RMSE_tmp_r(seed) = RMSE_r_best;
 
         %debug
-        if K==5000 && seed==4
-            break;
-        end
+        %if K==5000 && seed==5
+            %break;
+        %end
 
     end
 
     %debug
-    if K==5000 && seed==4
-        break;
-    end
+    %if K==5000 && seed==5
+        %break;
+    %end
 
     RMSEs_o(idx_K) = mean(RMSE_tmp_o);
     stds_o(idx_K) = std(RMSE_tmp_o);
@@ -411,7 +426,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures8/RMSE/';
+RMSE_path = './figures9/RMSE/';
 mkdir(RMSE_path);
 
 figure(1000);
