@@ -94,7 +94,7 @@ tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
 
 %進捗表示用
-now = 0;
+%now = 0;
 
 %RMSEグラフ描画用
 RMSEs_o = zeros(length(num_measurements), 1);
@@ -152,18 +152,18 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         %for trial = 1:num_inits
         parfor trial = 1:num_inits
             %進捗を表示
-            now = now + 1;
+            %now = now + 1;
             progress = sprintf('K=%d,seed=%d,trial=%d を計算中',K,seed,trial);
             disp(progress);
 
-            figure(trial);
+            %figure(trial);
             O_hat = O_hat_inits(:,:,trial);
             r_hat = r_hat_inits(:,:,trial);
             batch_es = zeros(max_itr,1);
 
-            elapsed_times = zeros(max_itr/100, 1);
-            itr = 0; hundreds = 0;
-            tic;
+            %elapsed_times = zeros(max_itr/100, 1);
+            itr = 0; %hundreds = 0;
+            %tic;
     
             %ADAMの初期化
             m_O = zeros(N);
@@ -205,7 +205,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                     v_TV_O = v_TV_O_re + 1i .*v_TV_O_im;
                     u_TV_O = u_TV_O + (O_hat - v_TV_O);
 
-                    
+                    %{
                     if rem(itr, 100)==0    %描画
                         hundreds = hundreds + 1;
                
@@ -247,9 +247,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                         end
 
                     end %描画終わり
-                    
-                    
-                    
+                    %}
+                 
                     if itr == max_itr %max_itrに達したとき更新終了
                         break;
                     end
