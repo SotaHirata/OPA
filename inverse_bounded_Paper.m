@@ -9,15 +9,15 @@ poolobj = parpool('Threads'); %並列処理用
 
 M = 10;     %uniformアレイの1辺の長さ
 N = M^2;    %アンテナ数
-maskD = N/2; %PDの受光範囲の直径
+maskD = N/20; %PDの受光範囲の直径
 
 %計測回数
-min_k = N^2*4;      % 開始値
-max_k = N^2*10;     % 終了値
-stride = N^2*2;     % 間隔
-%num_measurements = [min_k/5,min_k/2,min_k:stride:max_k];
-num_measurements = min_k:stride:max_k;
-%num_measurements = N^2*6;
+min_k = N^2*1;      % 開始値
+max_k = N^2*4;     % 終了値
+stride = N^2*1;     % 間隔
+num_measurements = [min_k/5,min_k/2,min_k:stride:max_k];
+%num_measurements = min_k:stride:max_k;
+%num_measurements = N^2/5;
 
 %ランダムな位相バイアス（N×N）の枚数
 num_phase_bias = 10;
@@ -29,10 +29,10 @@ num_inits = 5;
 noiseLv = 30;
 
 %limit iteration
-max_itr = 2e3;
+max_itr = 5e3;
 
 %SGDの設定
-batch_size = 2^5; %バッチサイズ
+batch_size = 2^6; %バッチサイズ
 num_epoch = 20000;  %エポック数
 
 %サポート
@@ -81,14 +81,14 @@ r_hat_inits = array.*rand(N,N,num_inits)*2*pi; %rの初期値のリスト
 mask = MyCirc(N, maskD); 
 
 %ADAMのパラメタ
-alpha = 5e-2;
+alpha = 2e-2;
 beta_1 = 0.95;
 beta_2 = 0.999;
 epsilon = 1e-8;
 
 %TVのパラメタ
 %rho_O = 0; %TVなし
-rho_O = 5e4; %TVあり
+rho_O = 5e2; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 4; %TVの反復数
@@ -121,7 +121,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
     %位相バイアスnum_phase_bias通りにたいして再構成を試す
-    %for seed = 5:5
+    %for seed = 6:6
     for seed = 1:num_phase_bias 
         %位相バイアス（N×N）を設定
         r = phase_biases(:,:,seed);
@@ -385,7 +385,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         title('Original object amplitude');
         
         subplot(4,3,2)
-        imagesc(wrapTo2Pi(angle(obj))); colormap gray; axis image; colorbar;
+        imagesc(wrapTo2Pi(angle(obj))); colormap gray; axis image; colorbar; clim([0, 2*pi]);
         title('Original object phase');
 
         subplot(4,3,3)
@@ -397,11 +397,11 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         title('Reconstructed amplitude');
 
         subplot(4,3,5)
-        imagesc(wrapTo2Pi(angle(O_hat_best))); colormap gray; axis image; colorbar;
+        imagesc(wrapTo2Pi(angle(O_hat_best))); colormap gray; axis image; colorbar; clim([0, 2*pi]);
         title('Reconstructed phase');
         
         subplot(4,3,6)
-        imagesc(r_hat_best); colormap gray; axis image; colorbar; clim([0, 2*pi]);
+        imagesc(r_hat_best); colormap gray; axis image; colorbar; clim([0, 2*pi]); 
         title('Reconstructed phase bias');
         
         subplot(4,3,7)
@@ -409,7 +409,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         title(['Corrected amplitude (RMSE=',num2str(RMSE_o_best, 4), ')']);
 
         subplot(4,3,8)
-        imagesc(wrapTo2Pi(angle(O_hat_corrected_best))); colormap gray; axis image; colorbar;
+        imagesc(wrapTo2Pi(angle(O_hat_corrected_best))); colormap gray; axis image; colorbar; clim([0, 2*pi]);
         title(['Corrected phase (RMSE=',num2str(RMSE_o_best, 4), ')']);
         
         subplot(4,3,9)
