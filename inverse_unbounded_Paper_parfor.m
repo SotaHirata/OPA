@@ -5,24 +5,24 @@ clear all;clc;
 rng(0); 
 %GPU_num = 4;
 %gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
-poolobj = parpool('Threads'); %並列処理用
+%poolobj = parpool('Threads'); %並列処理用
 
 M = 10;     %uniformアレイの1辺の長さ
-N = M^2;    %アンテナ数
+N = 100;    %アンテナ数
 
 %計測回数
 min_k = N^2*1;      % 開始値
 max_k = N^2*4;     % 終了値
 stride = N^2*1;     % 間隔
-num_measurements = [min_k/4,min_k/2,min_k:stride:max_k];
-%num_measurements = N^2*4;
+%num_measurements = [min_k/4,min_k/2,min_k:stride:max_k];
+num_measurements = N^2*8;
 %num_measurements = min_k:stride:max_k;
 
 %ランダムな位相バイアス（N×N）の枚数
 num_phase_bias = 10;
 
 %位相バイアス1つあたりの初期値数
-num_inits = 5;
+num_inits = 1;
 
 %AWGNのSN比
 noiseLv = 30;
@@ -50,12 +50,15 @@ obj = zeros(N);
 obj(row(1):row(end), col(1):col(end)) = img_gray_normalized;
 obj = gpuArray(double(obj)); obj_name = 'peppers';
 %}
+
 %obj = gpuArray(double(MyRect(N,[N/2,N/7],[N/2,N/3]) + MyRect(N,[N/2,N/7],[N/2,2*N/3]))) ; obj_name = 'RomeTwo';
 %obj = gpuArray(double(MyRect(N, N/2))) ; obj_name = 'HalfSqr';
 %obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
-image_gray = phantom('Modified Shepp-Logan',sup_size)+0.2; image_gray_normalized = image_gray/(max(image_gray(:)));
+
+image_gray = phantom('Modified Shepp-Logan',sup_size); image_gray_normalized = image_gray/(max(image_gray(:)));
 obj = zeros(N);
 obj(row(1):row(end), col(1):col(end)) = image_gray_normalized; obj_name = 'phantom';
+
 
 %アンテナ配置
 %array = gpuArray(double(MyRect(N, M))); array_name = 'Uni'; %for uniformアレイ
@@ -78,10 +81,10 @@ epsilon = 1e-8;
 
 %TVのパラメタ
 %rho_O = 0; %TVなし
-rho_O = 5e-2; %TVあり
+rho_O = 8e5; %TVあり
 tv_th = 1e-2;
 tv_tau = 0.05;
-tv_iter = 4; %TVの反復数
+tv_iter = 10; %TVの反復数
 
 %非負ペナルティ
 mu = 1e8; 
@@ -113,8 +116,8 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
     %位相バイアスnum_phase_bias通りにたいして再構成を試す
-    %for seed = 5:5
-    for seed = 1:num_phase_bias 
+    for seed = 4:6
+    %for seed = 1:num_phase_bias 
         %位相バイアス（N×N）を設定
         r = phase_biases(:,:,seed);
         
@@ -143,20 +146,21 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         batch_es_results = zeros(max_itr,num_inits);
 
         %初期値をnum_inits通り降って、最良のRMSE_rのケースを探索
-        parfor trial = 1:num_inits
+        for trial = 1:num_inits
+        %parfor trial = 1:num_inits
             %進捗を表示
-            %now = now + 1;
+            now = now + 1;
             progress = sprintf('K=%d,seed=%d,trial=%d を計算中',K,seed,trial);
             disp(progress);
 
-            %figure(trial);
+            figure(trial);
             O_hat = O_hat_inits(:,:,trial);
             r_hat = r_hat_inits(:,:,trial);
             batch_es = zeros(max_itr,1);
 
-            %elapsed_times = zeros(floor(max_itr/100), 1);
-            itr = 0; %hundreds = 0;
-            %tic;
+            elapsed_times = zeros(floor(max_itr/100), 1);
+            itr = 0; hundreds = 0;
+            tic;
     
             %ADAMの初期化
             m_O = zeros(N);
@@ -201,7 +205,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                     v_TV_O = reshape(MyTVpsi_ND(O_hat + u_TV_O, tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
                     u_TV_O = u_TV_O + (O_hat - v_TV_O);
                 
-                    %{
+                    
                     if rem(itr, 100)==0    %描画
                         hundreds = hundreds + 1;
     
@@ -236,7 +240,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
                         end 
     
                     end %描画終わり
-                    %}
+                    
                     
                   
     
@@ -390,7 +394,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figures9/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figures11/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -426,7 +430,7 @@ for idx_K = 1:length(num_measurements)    %計測回数Kループ
     clearvars phi A data_indice
 end
 
-RMSE_path = './figures9/RMSE/';
+RMSE_path = './figures11/RMSE/';
 mkdir(RMSE_path);
 
 figure(1000);
@@ -449,7 +453,7 @@ savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
 
 clearvars matrix img img_gray 
-delete(poolobj);
+%delete(poolobj);
 
 
 
