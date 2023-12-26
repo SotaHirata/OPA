@@ -12,20 +12,20 @@ N = 100;    %アンテナ数
 K = N^2*4;   %計測回数
 
 %ランダムアレイの配置パターン数
-num_randarray = 5;
+num_randarray = 10;
 arrays = randarray_gen(N,num_randarray);
 
 %ランダムな位相バイアス（N×N）の枚数
-num_phase_bias = 10;
+num_phase_bias = 1;
 
 %位相バイアス1つあたりの初期値数
-num_inits = 5;
+num_inits = 1;
 
 %AWGNのSN比
 noiseLv = 30;
 
 %最大反復数
-max_itr = 3e4;
+max_itr = 5e4;
 
 %SGDの設定
 batch_size = 2^5; %バッチサイズ
@@ -39,18 +39,19 @@ sup =MyRect(N, sup_size);
 [row, col] = find(sup ~= 0); %サポート領域のインデックス
 
 %オリジナル画像
-%{
+
 img = imread('peppers_color.png');
 img_gray =  double(rgb2gray(imresize(img, [sup_size, sup_size])));
 img_gray_normalized = img_gray / max(img_gray(:));
 obj = zeros(N);
-obj(row(1):row(end), col(1):col(end)) = img_gray_normalized;
-obj = gpuArray(double(obj)); obj_name = 'peppers';
-%}
+obj(row(1):row(end), col(1):col(end)) = img_gray_normalized; obj_name = 'peppers';
+
 %obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
+%{
 image_gray = phantom('Modified Shepp-Logan',sup_size); image_gray_normalized = image_gray/(max(image_gray(:)));
 obj = zeros(N);
 obj(row(1):row(end), col(1):col(end)) = image_gray_normalized; obj_name = 'phantom';
+%}
 
 %ADAMのパラメタ
 alpha = 2e-2;
@@ -60,7 +61,8 @@ epsilon = 1e-8;
 
 %TVのパラメタ
 %rho_O = 0; %TVなし
-rho_O = 1e-1; %TVあり
+%rho_O = 1e3; %TVあり(サポート付きの時の成功値)
+rho_O = 1e5;
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 5; %TVの反復数
@@ -76,9 +78,12 @@ stds_o = zeros(num_randarray, 1);
 RMSEs_r = zeros(num_randarray, 1);
 stds_r = zeros(num_randarray, 1);
 
-for idx_array = 1:num_randarray     %ランダムアレイを切り替えてループ
+for idx_array = 2:10
+%for idx_array = 1:num_randarray     %ランダムアレイを切り替えてループ
     array = arrays(:,:,idx_array);
-    array_name = sprintf('Rand%d',idx_array);
+    array = array + MyRect(N,8);
+    array(array>1) = 1;
+    array_name = sprintf('Rand%drect',idx_array);
 
     %位相シフトKパターン（N×N×K）を設定
     phi = array.*rand(N,N,K)*2*pi;
@@ -109,7 +114,7 @@ for idx_array = 1:num_randarray     %ランダムアレイを切り替えてル�
             S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
         end
         S = reshape(S, [K,1]);
-        S = awgn(S,noiseLv,'measured');
+        %S = awgn(S,noiseLv,'measured');
         clearvars batch_F
 
         %逆問題
