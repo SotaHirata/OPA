@@ -61,8 +61,7 @@ epsilon = 1e-8;
 
 %TVのパラメタ
 %rho_O = 0; %TVなし
-%rho_O = 1e3; %TVあり(サポート付きの時の成功値)
-rho_O = 1e5;
+rho_O = 1e3; %TVあり(サポート付きの時の成功値)
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 5; %TVの反復数
