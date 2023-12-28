@@ -5,11 +5,11 @@ clear all;clc;
 rng(0); 
 %GPU_num = 4;
 %gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
-%poolobj = parpool('Threads'); %並列処理用
+poolobj = parpool('Threads'); %並列処理用
 
 M = 10;     %uniformアレイの1辺の長さ
 N = 100;    %アンテナの1辺の長さ
-K = N^2*8;   %計測回数
+K = N^2*7;   %計測回数
 
 %ランダムアレイの配置パターン数
 num_antennas = ceil([N/2,N/1.5,N,N*2,N*.5,N*3,N*4]);
@@ -77,8 +77,7 @@ epsilon = 1e-8;
 
 %TVのパラメタ
 %rho_O = 0; %TVなし
-%rho_O = 2e6; %SNR=60,アンテナ数=250,300,400の時の成功値
-rho_O = 2e6;
+rho_O = 2e6; %SNR=60,の成功値
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 5; %TVの反復数
@@ -87,7 +86,7 @@ tv_iter = 5; %TVの反復数
 mu = 1e8; 
 
 %進捗表示用
-now = 0;
+%now = 0;
 %RMSEグラフ描画用
 RMSEs_o = zeros(num_randarray, 1);
 stds_o = zeros(num_randarray, 1);
@@ -113,7 +112,6 @@ for idx_array = 1:num_randarray     %アンテナ数を切り替えてループ
     RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
     %位相バイアスnum_phase_bias通りにたいして再構成を試す
-    %for seed = 4:5
     for seed = 1:num_phase_bias 
         %位相バイアス（N×N）を設定
         r = phase_biases(:,:,seed);
@@ -137,21 +135,21 @@ for idx_array = 1:num_randarray     %アンテナ数を切り替えてループ
         batch_es_results = zeros(max_itr,num_inits);
 
         %初期値（O_hat, r_hat）をnum_inits通り降って、最良のRMSE_rのケースを探索
-        for trial = 1:num_inits
-        %parfor trial = 1:num_inits
+        %for trial = 1:num_inits
+        parfor trial = 1:num_inits
             %進捗を表示
-            now = now + 1;
+            %now = now + 1;
             progress = sprintf('アンテナ数=%d (%d/%d),バイアスseed(%d/%d),初期値trial(%d/%d)を計算中',num_antennas(idx_array),idx_array,num_randarray,seed,num_phase_bias,trial,num_inits);
             disp(progress);
             
-            figure(trial);
+            %figure(trial);
             O_hat = O_hat_inits(:,:,trial);
             r_hat = r_hat_inits(:,:,trial);
             batch_es = zeros(max_itr,1);
 
-            elapsed_times = zeros(floor(max_itr/100), 1);
-            itr = 0; hundreds = 0;
-            tic;
+            %elapsed_times = zeros(floor(max_itr/100), 1);
+            itr = 0; %hundreds = 0;
+            %tic;
     
             %ADAMの初期化
             m_O = zeros(N);
@@ -196,7 +194,7 @@ for idx_array = 1:num_randarray     %アンテナ数を切り替えてループ
                     v_TV_O = reshape(MyTVpsi_ND(O_hat + u_TV_O, tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
                     u_TV_O = u_TV_O + (O_hat - v_TV_O);
                 
-                    
+                    %{
                     if rem(itr, 100)==0    %描画
                         hundreds = hundreds + 1;
     
@@ -231,6 +229,7 @@ for idx_array = 1:num_randarray     %アンテナ数を切り替えてループ
                         end 
     
                     end %描画終わり
+                    %}
 
                     if itr == max_itr %max_itrに達したとき更新終了
                         break;
