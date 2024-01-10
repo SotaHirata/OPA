@@ -1,11 +1,7 @@
-close all;
-delete(gcp('nocreate'))
-clear all;clc;
-
-rng(0); 
-%GPU_num = 4;
-%gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
-%poolobj = parpool('Threads'); %並列処理用
+%% 初期設定
+close all; delete(gcp('nocreate')); clear all; clc; rng(0); 
+%GPU_num = 4; %gpuDevice(GPU_num); reset(gpuDevice(GPU_num)); executionEnvironment = 'gpu'; gpurng(0);
+poolobj = parpool('Threads'); %並列処理用
 
 M = 10;      %uniformアレイの1辺の長さ
 N = 100;     %アンテナの1辺の長さ
@@ -13,17 +9,18 @@ K = N^2*8;   %計測回数
 
 %Gaussianアレイの配置パターン数
 %num_antennas = ceil([N/2,N/1.5,N,N*1.5,N*2,N*3,N*4]);
-num_antennas = ceil([N]);
+num_antennas = ceil([N,N*4]);
+%num_antennas = ceil([N]);
 num_antennas_len = length(num_antennas);
 %Gaussianアレイのシグマ
 sigma = 10;
 array_name = sprintf('GaussSigma%d',sigma);
 
 %あるアンテナ数のGaussianアレイのパターン数
-num_Gauss_trial = 1;
+num_Gauss_trial = 10;
 
 %位相バイアス1つあたりの初期値数
-num_inits = 1;
+num_inits = 5;
 
 %AWGNのSN比
 noiseLv = 40;
@@ -37,9 +34,8 @@ num_epoch = 1000; %エポック数（今回はmax_itrで停止するので無関
 data_indice = randperm(K); %ミニバッチ列を用意
     
 %サポート
-%sup_size = ceil(N/1.5);
 sup_size = N;
-sup =MyRect(N, sup_size);
+sup = MyRect(N, sup_size);
 [row, col] = find(sup ~= 0); %サポート領域のインデックス
 
 %オリジナル画像
@@ -49,35 +45,265 @@ img_gray_normalized = img_gray / max(img_gray(:));
 obj = zeros(N);
 obj(row(1):row(end), col(1):col(end)) = img_gray_normalized; obj_name = 'peppers';
 
-%obj = MyRect(N, N/2) ; obj_name = 'HalfSqr';
-%{
-image_gray = phantom('Modified Shepp-Logan',sup_size); image_gray_normalized = image_gray/(max(image_gray(:)));
-obj = zeros(N);
-obj(row(1):row(end), col(1):col(end)) = image_gray_normalized; obj_name = 'phantom';
-%}
-
 %ADAMのパラメタ
 alpha = 2e-2;
 beta_1 = 0.98;
 beta_2 = 0.999;
 epsilon = 1e-8;
 
-%TVのパラメタ
+%% TVのパラメタのグリッドサーチ
+%rho_Os = [1,2,4,8,16,32,64,128,256,512].*2e6;
+rho_Os = [3e7,6e8];
+num_rho_Os = length(rho_Os);
 %rho_O = 3e7; %SNR=40,アンテナ数=100のベスト値
 %rho_O = 1e8; %SNR=40,アンテナ数=100のギリギリ
-
-rho_O = 6e8; %SNR=40,アンテナ数=400のベスト値
+%rho_O = 6e8; %SNR=40,アンテナ数=400のベスト値
 %rho_O = 1e9; %SNR=40,アンテナ数=400のギリギリ
-
 tv_th = 1e-2;
 tv_tau = 0.05;
 tv_iter = 5; %TVの反復数
 
 %非負ペナルティ
-mu = 1e8; 
+mu = 1e8;
 
-%進捗表示用
-now = 0;
+%アンテナ数ごとにチューニングされた最適なrho_Oを保持する変数
+rho_O_tuned = zeros(num_antennas_len,1);
+
+for idx_antenna = 1:num_antennas_len %アンテナ数ごとに最適なrho_Oを決める
+    %アンテナ数を設定
+    num_antenna = num_antennas(idx_antenna);
+    %アンテナ配置
+    array = Gaussianarray_gen(N,num_antenna,sigma);
+    %位相シフトKパターン（N×N×K）を設定
+    phi = array.*rand(N,N,K)*2*pi;
+    %アンテナ配置×位相シフト（N×N×K）
+    A = array.*exp(1i*phi);
+    %位相バイアス（N×N）を設定
+    r = array.*(rand(N)*2*pi);
+
+    %順伝播:PDの観測強度（K×1）を計算
+    S = zeros(1,K);
+    for batch_start = 1:batch_size:K
+        %batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*gpuArray(double(exp(1i*r))));
+        batch_F = MyFFT2(A(:,:,batch_start:min(batch_start+batch_size-1, K)).*exp(1i*r));
+        S(batch_start:min(batch_start+batch_size -1, K)) = sum(abs(batch_F).^2.*obj.*sup, [1,2]);
+    end
+    S = reshape(S, [K,1]);
+    S = awgn(S,noiseLv,'measured');
+    clearvars batch_F
+
+    %各rho_Oに対するRMSE_oを記録する変数
+    RMSE_TVs = zeros(num_rho_Os,1);
+    %初期値を統一
+    O_hat_init = rand(N);
+    r_hat_init = array.*rand(N).*2*pi;
+
+    parfor idx_rho = 1:num_rho_Os %rho_Oを切り替えて最適なrho_Oを探索
+        %rho_Oを設定
+        rho_O = rho_Os(idx_rho);
+        
+        %逆問題
+        %figure(idx_rho);
+        O_hat = O_hat_init;
+        r_hat = r_hat_init;
+        batch_es = zeros(max_itr,1);
+
+        %ADAMの初期化
+        m_O = zeros(N);
+        v_O = zeros(N);
+        m_r = zeros(N);
+        v_r = zeros(N);
+
+        %TVの初期化
+        v_TV_O =  ones(N);
+        u_TV_O = zeros(N);
+
+        %elapsed_times = zeros(floor(max_itr/100), 1);
+        itr = 0; %hundreds = 0;
+        %tic;
+
+        for epoch = 1:num_epoch
+            for batch_start = 1:batch_size:K %ミニバッチ
+                itr = itr + 1;
+        
+                batch_idx = data_indice(batch_start:min(batch_start+batch_size-1, K));
+                batch_A = A(:,:,batch_idx);
+                batch_F = MyFFT2(batch_A.*exp(1i*r_hat));
+                batch_S_hat = reshape(sum(abs(batch_F).^2.*O_hat, [1,2]), [length(batch_idx),1]);
+                batch_e = batch_S_hat - S(batch_idx);
+                batch_es(itr) = mean(abs(batch_e).^2, 'all');
+        
+                %非負ペナルティ
+                ReLU_O = -O_hat;
+                ReLU_O(O_hat>0) = 0;
+                dReLU_O = zeros(N);
+                dReLU_O(O_hat<0) = -1;
+        
+                %O,rの勾配
+                st_O = 2*sum(abs(batch_F).^2.*reshape(batch_e, [1,1,length(batch_idx)]), 3) + 2.*rho_O.*(O_hat - (v_TV_O - u_TV_O)) + 2*mu*dReLU_O.*ReLU_O;
+                st_r = 2*(-1i*exp(-1i*r_hat)).*sum(2*conj(batch_A).*MyIFFT2(batch_F.*O_hat.*reshape(batch_e, [1,1,length(batch_idx)])),3);
+                    
+                %Adam
+                [st_O, m_O, v_O] = Adam_func(st_O,m_O,v_O,itr,alpha,beta_1,beta_2,epsilon);
+                [st_r, m_r, v_r] = Adam_func(st_r,m_r,v_r,itr,alpha,beta_1,beta_2,epsilon);
+               
+                %O,rの更新
+                O_hat = (O_hat - st_O).*sup; %Oの更新式 
+                r_hat = r_hat - real(st_r); %rの更新式
+            
+                %v,uの更新
+                v_TV_O = reshape(MyTVpsi_ND(O_hat + u_TV_O, tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
+                u_TV_O = u_TV_O + (O_hat - v_TV_O);
+            
+                %{
+                if rem(itr, 100)==0    %描画
+                    hundreds = hundreds + 1;
+
+                    subplot(3,2,1)
+                    imagesc(obj); colormap gray; axis image; colorbar;
+                    title('Original object');
+            
+                    subplot(3,2,2)
+                    imagesc(r); colormap gray; axis image; colorbar;
+                    title('Original phase bias');
+            
+                    subplot(3,2,3)
+                    imagesc(real(O_hat)); colormap gray; axis image; colorbar;
+                    title(['Reconstructed image ( itr=',num2str(itr), ' )']);
+            
+                    subplot(3,2,4)
+                    imagesc(r_hat); colormap gray; axis image; colorbar;
+                    title(['Reconstructed phase bias  ( itr=',num2str(itr), ' )']);
+            
+                    subplot(3,2,[5,6])
+                    semilogy(batch_es(1:itr));
+                    title(['|S_{hat} - S|^2 (', num2str(sum(elapsed_times)/hundreds,4),'sec/100itr) ','(batchsize=',num2str(batch_size),')']);
+            
+                    drawnow(); 
+            
+                    %イテレーションごとの所要時間
+                    elapsed_time = toc;
+                    %fprintf('イテレーション %d の経過時間: %f 秒\n', itr, elapsed_time);
+                    elapsed_times(hundreds) = elapsed_time;
+                    if itr ~=max_itr
+                      tic;
+                    end 
+
+                end %描画終わり
+                %}
+
+                if itr == max_itr %max_itrに達したとき更新終了
+                    break;
+                end
+
+            end %ミニバッチ終わり
+
+            if itr == max_itr %max_itrに達したとき更新終了
+                break;
+            end
+        end %エポック終わり
+
+        O_hat = real(O_hat); %念のため
+
+        %ここから品質評価
+        %サポート上のobjとO_hat_bestの相互相関
+        O_hat_onSup = O_hat(row(1):row(end), col(1):col(end));
+        obj_onSup = obj(row(1):row(end), col(1):col(end));
+        O_hat_onSup_flip = rot90(O_hat_onSup, 2);
+        corr_map = real(MyIFFT2(MyFFT2(obj_onSup) .* MyFFT2(O_hat_onSup_flip)));
+        
+        %相互相関が最大となるindexを求め、サポート上のO_hat_bestのシフト量を求める
+        [max_corr, max_corr_index] = max(corr_map(:));
+        [max_corr_row, max_corr_col] = ind2sub(size(corr_map), max_corr_index);
+        rows_shift = max_corr_row - ceil(length(corr_map)/2) ;
+        cols_shift = max_corr_col - ceil(length(corr_map)/2) ;
+
+        %24近傍シフト時の最良補正値の保存変数の初期化
+        RMSE_o_best = 0;
+        SSIM_o_best = 0;
+        RMSE_r_best = 1000; 
+        O_hat_shifted_best = zeros(N);
+        exp_r_hat_corrected_best = exp(1i*ones(N));
+        row_add_best = 0;
+        col_add_best = 0;
+        dif_bias_best = 0;
+
+        %24近傍でRMSE_rが最小となるシフト量を探索
+        for row_add = -2:2
+            for col_add = -2:2
+                %row_shift, col_shiftを8近傍にシフト
+                rows_shift_added = rows_shift + row_add;
+                cols_shift_added = cols_shift + col_add;
+
+                %サポート上のO_hatをシフト
+                O_hat_onSup_shift = circshift(O_hat_onSup, [rows_shift_added, cols_shift_added]);
+        
+                %外側を0paddingしてsupport付き画像に戻す
+                O_hat_shifted = zeros(N);
+                O_hat_shifted(row(1):row(end), col(1):col(end)) = O_hat_onSup_shift;
+                        
+                %O_hatのシフト量からr_hatのシフト量を算出しr_hatを補正 
+                [meshx, meshy] = meshgrid(ceil(-(N-1)/2):ceil((N-1)/2), ceil(-(N-1)/2):ceil((N-1)/2));
+                r_hat_shifted = (r_hat + 2*pi.*rows_shift_added.*meshy./N + 2*pi.*cols_shift_added.*meshx./N).*array;
+                
+                %r_hatのオフセット量を推定し位相を補正
+                dif = r - r_hat_shifted;
+                %for [0,2pi]
+                dif_bias_1 =  wrapTo2Pi(dif);
+                bias_offset_1 = sum(dif_bias_1(:))/num_antenna;
+                exp_r_hat_corrected_1 = exp(1i*(r_hat_shifted +bias_offset_1).*array);
+                %for [-pi,pi]
+                dif_bias_2 =  wrapToPi(dif);
+                bias_offset_2 = sum(dif_bias_2(:))/num_antenna;
+                exp_r_hat_corrected_2 = exp(1i*(r_hat_shifted +bias_offset_2).*array);
+
+                %SSIM,RMSEの計算
+                RMSE_o = sqrt(mean((O_hat_shifted(:) - obj(:)).^2));
+                SSIM_o = ssim(O_hat_shifted, obj);
+                RMSE_r_1 = sqrt(sum(abs(exp_r_hat_corrected_1(:) - exp(1i*r(:))).^2)/num_antenna);
+                RMSE_r_2 = sqrt(sum(abs(exp_r_hat_corrected_2(:) - exp(1i*r(:))).^2)/num_antenna);
+
+                if RMSE_r_1 < RMSE_r_2
+                    RMSE_r = RMSE_r_1;
+                    exp_r_hat_corrected = exp_r_hat_corrected_1;
+                else
+                    RMSE_r = RMSE_r_2;
+                    exp_r_hat_corrected = exp_r_hat_corrected_2;
+                end
+
+                %RMSE_rが最小の時の各補正値を保持
+                if RMSE_r < RMSE_r_best
+                    RMSE_o_best = RMSE_o;
+                    SSIM_o_best = SSIM_o;
+                    RMSE_r_best = RMSE_r;
+                    O_hat_shifted_best = O_hat_shifted;
+                    exp_r_hat_corrected_best = exp_r_hat_corrected;
+                    row_add_best = row_add;
+                    col_add_best = col_add;
+                    dif_best = dif;
+                end
+            end
+        end
+
+        RMSE_TVs(idx_rho) = RMSE_o_best;
+
+        %進捗を表示
+        progress = sprintf('アンテナ数=%d (%d/%d),rho_o=%.2e(%d/%d)のとき:RMSE_o=%.4f',num_antenna,idx_antenna,num_antennas_len,rho_O,idx_rho,num_rho_Os,RMSE_o_best);
+        disp(progress);
+
+    end %rho_Oを切り替えてのループ終わり
+
+    [min_RMSE, min_idx_rho] = min(RMSE_TVs);
+    rho_O_tuned(idx_antenna) = rho_Os(min_idx_rho);
+
+    %進捗を表示
+    progress = sprintf('アンテナ数=%d (%d/%d)のチューニング結果: rho_O=%.2e,RMSE_o=%.4f',num_antenna,idx_antenna,num_antennas_len,rho_Os(min_idx_rho),min_RMSE);
+    disp(progress);
+
+end %アンテナ数ごとのrho_Oのチューニング終了
+
+
+%% ハイパーパラメータ決定後の検証
 %SSIM（被写体）RMSE（位相バイアス）グラフ描画用
 RMSEs_o = zeros(num_antennas_len, 1);
 stds_rmse_o = zeros(num_antennas_len, 1);
@@ -89,6 +315,8 @@ stds_r = zeros(num_antennas_len, 1);
 for idx_antenna = 1:num_antennas_len     %アンテナ数を切り替えてループ
     %アンテナ数を設定
     num_antenna = num_antennas(idx_antenna);
+    %ハイパーパラメータを設定
+    rho_O = rho_O_tuned(idx_antenna);
 
     %SSIM,RMSEの平均・標準偏差計算のための記憶用変数の初期化
     RMSE_tmp_o = zeros(num_Gauss_trial, 1); 
@@ -129,21 +357,20 @@ for idx_antenna = 1:num_antennas_len     %アンテナ数を切り替えてル�
         batch_es_results = zeros(max_itr,num_inits);
 
         %初期値（O_hat, r_hat）をnum_inits通り降って、最良のRMSE_rのケースを探索
-        for trial = 1:num_inits
-        %parfor trial = 1:num_inits
+        %for trial = 1:num_inits
+        parfor trial = 1:num_inits
             %進捗を表示
-            now = now + 1;
             progress = sprintf('アンテナ数=%d (%d/%d),Gaussアレイseed(%d/%d),初期値trial(%d/%d)を計算中',num_antenna,idx_antenna,num_antennas_len,seed,num_Gauss_trial,trial,num_inits);
             disp(progress);
             
-            figure(trial);
+            %figure(trial);
             O_hat = O_hat_inits(:,:,trial);
             r_hat = r_hat_inits(:,:,trial);
             batch_es = zeros(max_itr,1);
 
-            elapsed_times = zeros(floor(max_itr/100), 1);
-            itr = 0; hundreds = 0;
-            tic;
+            %elapsed_times = zeros(floor(max_itr/100), 1);
+            itr = 0; %hundreds = 0;
+            %tic;
     
             %ADAMの初期化
             m_O = zeros(N);
@@ -188,7 +415,7 @@ for idx_antenna = 1:num_antennas_len     %アンテナ数を切り替えてル�
                     v_TV_O = reshape(MyTVpsi_ND(O_hat + u_TV_O, tv_th, tv_tau, tv_iter, [N, N]), [N, N]);
                     u_TV_O = u_TV_O + (O_hat - v_TV_O);
                 
-                    %
+                    %{
                     if rem(itr, 100)==0    %描画
                         hundreds = hundreds + 1;
     
@@ -223,7 +450,7 @@ for idx_antenna = 1:num_antennas_len     %アンテナ数を切り替えてル�
                         end 
     
                     end %描画終わり
-                    %
+                    %}
 
                     if itr == max_itr %max_itrに達したとき更新終了
                         break;
