@@ -8,9 +8,8 @@ N = 100;     %アンテナの1辺の長さ
 K = N^2*8;   %計測回数
 
 %Gaussianアレイの配置パターン数
-%num_antennas = ceil([N/2,N/1.5,N,N*1.5,N*2,N*3,N*4]);
-num_antennas = ceil([N,N*4]);
-%num_antennas = ceil([N]);
+num_antennas = ceil([N/2,N/1.5,N,N*1.5,N*2,N*3,N*4]);
+%num_antennas = ceil([N,N*4]);
 num_antennas_len = length(num_antennas);
 %Gaussianアレイのシグマ
 sigma = 10;
@@ -52,8 +51,8 @@ beta_2 = 0.999;
 epsilon = 1e-8;
 
 %% TVのパラメタのグリッドサーチ
-%rho_Os = [1,2,4,8,16,32,64,128,256,512].*2e6;
-rho_Os = [3e7,6e8];
+rho_Os = [1,2,4,8,16,32,64,128,256,512].*2e6;
+%rho_Os = [3e7,6e8];
 num_rho_Os = length(rho_Os);
 %rho_O = 3e7; %SNR=40,アンテナ数=100のベスト値
 %rho_O = 1e8; %SNR=40,アンテナ数=100のギリギリ
@@ -518,15 +517,12 @@ for idx_antenna = 1:num_antennas_len     %アンテナ数を切り替えてル�
                 r_hat_shifted = (r_hat_best + 2*pi.*rows_shift_added.*meshy./N + 2*pi.*cols_shift_added.*meshx./N).*array;
                 
                 %r_hatのオフセット量を推定し位相を補正
-                %dif = r - wrapTo2Pi(r_hat_shifted);
                 dif = r - r_hat_shifted;
                 %for [0,2pi]
-                %dif_bias_1 =  wrapTo2Pi(r - wrapTo2Pi(r_hat_shifted));
                 dif_bias_1 =  wrapTo2Pi(dif);
                 bias_offset_1 = sum(dif_bias_1(:))/num_antenna;
                 exp_r_hat_corrected_1 = exp(1i*(r_hat_shifted +bias_offset_1).*array);
                 %for [-pi,pi]
-                %dif_bias_2 =  wrapToPi(r - wrapTo2Pi(r_hat_shifted));
                 dif_bias_2 =  wrapToPi(dif);
                 bias_offset_2 = sum(dif_bias_2(:))/num_antenna;
                 exp_r_hat_corrected_2 = exp(1i*(r_hat_shifted +bias_offset_2).*array);
@@ -611,7 +607,7 @@ for idx_antenna = 1:num_antennas_len     %アンテナ数を切り替えてル�
         savefig(filename_fig);
         print(filename_png, '-dpng', '-r300');
 
-        finishMessage = sprintf('アンテナ数=%d (%d/%d),バイアスseed(%d/%d)の結果を保存 (RMSE_o_best=%.4f,SSIM_o_best=%.4f,RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',num_antenna,idx_antenna,num_antennas_len,seed,num_Gauss_trial,RMSE_o_best,SSIM_o_best,RMSE_r_best,row_add_best,col_add_best);
+        finishMessage = sprintf('アンテナ数=%d (%d/%d),Gaussアレイseed(%d/%d)の結果を保存 (RMSE_o_best=%.4f,SSIM_o_best=%.4f,RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',num_antenna,idx_antenna,num_antennas_len,seed,num_Gauss_trial,RMSE_o_best,SSIM_o_best,RMSE_r_best,row_add_best,col_add_best);
         disp(finishMessage);
 
         %SSIM,RMSEを保存

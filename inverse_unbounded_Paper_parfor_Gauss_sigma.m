@@ -11,15 +11,15 @@ K = N^2*8;   %計測回数
 num_antenna = N;
 array_name = sprintf('GaussAntn%d',num_antenna);
 %Gaussianアレイのシグマのパターン
-%sigmas = [5,7.5,10,12.5,15];
-sigmas = [5,12.5];
+sigmas = [5,7.5,10,12.5,15];
+%sigmas = [5,12.5];
 sigmas_len = length(sigmas);
 
 %あるアンテナ数のGaussianアレイのパターン数
-num_Gauss_trial = 1;
+num_Gauss_trial = 10;
 
 %位相バイアス1つあたりの初期値数
-num_inits = 1;
+num_inits = 5;
 
 %AWGNのSN比
 noiseLv = 40;
@@ -51,8 +51,8 @@ beta_2 = 0.999;
 epsilon = 1e-8;
 
 %% TVのパラメタのグリッドサーチ
-%rho_Os = [1,2,4,8,16,32,64,128,256,512].*2e6;
-rho_Os = [3e7,6e8];
+rho_Os = [1,2,4,8,16,32,64,128,256,512].*2e6;
+%rho_Os = [3e7,6e8];
 num_rho_Os = length(rho_Os);
 tv_th = 1e-2;
 tv_tau = 0.05;
@@ -64,7 +64,7 @@ mu = 1e8;
 %アンテナ数ごとにチューニングされた最適なrho_Oを保持する変数
 rho_O_tuned = zeros(sigmas_len,1);
 
-for idx_sigma = 1:sigmas_len %アンテナ数ごとに最適なrho_Oを決める
+for idx_sigma = 1:sigmas_len %シグマごとに最適なrho_Oを決める
     %σを設定
     sigma = sigmas(idx_sigma);
     %アンテナ配置
@@ -295,7 +295,7 @@ for idx_sigma = 1:sigmas_len %アンテナ数ごとに最適なrho_Oを決める
     progress = sprintf('sigma=%.1f (%d/%d)のチューニング結果: rho_O=%.2e,RMSE_o=%.4f',sigma,idx_sigma,sigmas_len,rho_Os(min_idx_rho),min_RMSE);
     disp(progress);
 
-end %アンテナ数ごとのrho_Oのチューニング終了
+end %シグマごとのrho_Oのチューニング終了
 
 
 %% ハイパーパラメータ決定後の検証
@@ -307,7 +307,7 @@ stds_ssim_o = zeros(sigmas_len, 1);
 RMSEs_r = zeros(sigmas_len, 1);
 stds_r = zeros(sigmas_len, 1);
 
-for idx_sigma = 1:sigmas_len     %アンテナ数を切り替えてループ
+for idx_sigma = 1:sigmas_len     %シグマを切り替えてループ
     %シグマを設定
     sigma = sigmas(idx_sigma);
     %ハイパーパラメータを設定
@@ -606,7 +606,7 @@ for idx_sigma = 1:sigmas_len     %アンテナ数を切り替えてループ
         savefig(filename_fig);
         print(filename_png, '-dpng', '-r300');
 
-        finishMessage = sprintf('sigma=%.1f (%d/%d),バイアスseed(%d/%d)の結果を保存 (RMSE_o_best=%.4f,SSIM_o_best=%.4f,RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',sigma,idx_sigma,sigmas_len,seed,num_Gauss_trial,RMSE_o_best,SSIM_o_best,RMSE_r_best,row_add_best,col_add_best);
+        finishMessage = sprintf('sigma=%.1f (%d/%d),Gaussアレイseed(%d/%d)の結果を保存 (RMSE_o_best=%.4f,SSIM_o_best=%.4f,RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',sigma,idx_sigma,sigmas_len,seed,num_Gauss_trial,RMSE_o_best,SSIM_o_best,RMSE_r_best,row_add_best,col_add_best);
         disp(finishMessage);
 
         %SSIM,RMSEを保存
