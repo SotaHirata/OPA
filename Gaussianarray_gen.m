@@ -26,7 +26,7 @@ function matrix = Gaussianarray_gen(N, M, sigma)
             
             % 最大試行回数を超えた場合はリトライ
             attempts = attempts + 1;
-            if attempts > 2000
+            if attempts > 20000
                 warning('Max attempts reached. Some points may not be placed.');
                 break;
             end

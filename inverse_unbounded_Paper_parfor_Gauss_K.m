@@ -5,18 +5,19 @@ poolobj = parpool('Threads'); %並列処理用
 
 M = 10;      %uniformアレイの1辺の長さ
 N = 100;     %アンテナの1辺の長さ
-K = N^2*2;   %計測回数
+Ks = [1/4,1/2,1,2,4,6,8].*(N^2);
+%Ks = [4].*(N^2);
+Ks_len = length(Ks);
 
 %Gaussianアレイの設定
 num_antenna = N;
-array_name = sprintf('GaussAntn%d',num_antenna);
-%Gaussianアレイのシグマのパターン
-sigmas = [1.5,2.5,5,7.5,10,12.5,15];
-%sigmas = [5,12.5];
-sigmas_len = length(sigmas);
+sigma = 7.5;
+array = Gaussianarray_gen(N,num_antenna,sigma);
+array_name = sprintf('Gauss_Antn%d_Sigma%.1f',num_antenna,sigma);
 
-%あるアンテナ数のGaussianアレイのパターン数
-num_Gauss_trial = 10;
+%位相バイアスパターンの設定
+num_phase_bias = 10;
+phase_biases = array.*rand(N,N,num_phase_bias).*2*pi;
 
 %位相バイアス1つあたりの初期値数
 num_inits = 5;
@@ -30,7 +31,6 @@ max_itr = 1e4;
 %SGDの設定
 batch_size = 2^5; %バッチサイズ
 num_epoch = 1000; %エポック数（今回はmax_itrで停止するので無関係. 十分大にしておく）
-data_indice = randperm(K); %ミニバッチ列を用意
     
 %サポート
 sup_size = N;
@@ -52,7 +52,7 @@ epsilon = 1e-8;
 
 %% TVのパラメタのグリッドサーチ
 rho_Os = [1,2,4,8,16,32,64,128,256,512].*2e6;
-%rho_Os = [3e7,6e8];
+%rho_Os = [1e7,3e7,1e8];
 num_rho_Os = length(rho_Os);
 tv_th = 1e-2;
 tv_tau = 0.05;
@@ -61,21 +61,25 @@ tv_iter = 5; %TVの反復数
 %非負ペナルティ
 mu = 1e8;
 
-%アンテナ数ごとにチューニングされた最適なrho_Oを保持する変数
-rho_O_tuned = zeros(sigmas_len,1);
+%Kごとにチューニングされた最適なrho_Oを保持する変数
+rho_O_tuned = zeros(Ks_len,1);
 
-for idx_sigma = 1:sigmas_len %シグマごとに最適なrho_Oを決める
-    %σを設定
-    sigma = sigmas(idx_sigma);
-    %アンテナ配置
-    array = Gaussianarray_gen(N,num_antenna,sigma);
+%位相バイアス（N×N）を固定
+r = array.*(rand(N)*2*pi);
+%初期値を統一
+O_hat_init = rand(N);
+r_hat_init = array.*rand(N).*2*pi;
+
+for idx_K = 1:Ks_len %Kごとに最適なrho_Oを決める
+    %Kを設定
+    K = Ks(idx_K);
+    data_indice = randperm(K); %ミニバッチ列を用意
+
     %位相シフトKパターン（N×N×K）を設定
     phi = array.*rand(N,N,K)*2*pi;
     %アンテナ配置×位相シフト（N×N×K）
     A = array.*exp(1i*phi);
-    %位相バイアス（N×N）を設定
-    r = array.*(rand(N)*2*pi);
-
+    
     %順伝播:PDの観測強度（K×1）を計算
     S = zeros(1,K);
     for batch_start = 1:batch_size:K
@@ -89,11 +93,9 @@ for idx_sigma = 1:sigmas_len %シグマごとに最適なrho_Oを決める
 
     %各rho_Oに対するRMSE_oを記録する変数
     RMSE_TVs = zeros(num_rho_Os,1);
-    %初期値を統一
-    O_hat_init = rand(N);
-    r_hat_init = array.*rand(N).*2*pi;
 
     parfor idx_rho = 1:num_rho_Os %rho_Oを切り替えて最適なrho_Oを探索
+    %for idx_rho = 1:num_rho_Os
         %rho_Oを設定
         rho_O = rho_Os(idx_rho);
         
@@ -226,7 +228,7 @@ for idx_sigma = 1:sigmas_len %シグマごとに最適なrho_Oを決める
         %24近傍でRMSE_rが最小となるシフト量を探索
         for row_add = -2:2
             for col_add = -2:2
-                %row_shift, col_shiftを8近傍にシフト
+                %row_shift, col_shiftを24近傍にシフト
                 rows_shift_added = rows_shift + row_add;
                 cols_shift_added = cols_shift + col_add;
 
@@ -283,55 +285,55 @@ for idx_sigma = 1:sigmas_len %シグマごとに最適なrho_Oを決める
         RMSE_TVs(idx_rho) = RMSE_o_best;
 
         %進捗を表示
-        progress = sprintf('sigma=%.1f (%d/%d),rho_o=%.2e(%d/%d)のとき:RMSE_o=%.4f',sigma,idx_sigma,sigmas_len,rho_O,idx_rho,num_rho_Os,RMSE_o_best);
+        progress = sprintf('K=%d (%d/%d),rho_o=%.2e(%d/%d)のとき:RMSE_o=%.4f',K,idx_K,Ks_len,rho_O,idx_rho,num_rho_Os,RMSE_o_best);
         disp(progress);
 
     end %rho_Oを切り替えてのループ終わり
 
     [min_RMSE, min_idx_rho] = min(RMSE_TVs);
-    rho_O_tuned(idx_sigma) = rho_Os(min_idx_rho);
+    rho_O_tuned(idx_K) = rho_Os(min_idx_rho);
 
     %進捗を表示
-    progress = sprintf('sigma=%.1f (%d/%d)のチューニング結果: rho_O=%.2e,RMSE_o=%.4f',sigma,idx_sigma,sigmas_len,rho_Os(min_idx_rho),min_RMSE);
+    progress = sprintf('K=%d (%d/%d)のチューニング結果: rho_O=%.2e,RMSE_o=%.4f',K,idx_K,Ks_len,rho_Os(min_idx_rho),min_RMSE);
     disp(progress);
 
-end %シグマごとのrho_Oのチューニング終了
+end %Kごとのrho_Oのチューニング終了
 
 
 %% ハイパーパラメータ決定後の検証
 %SSIM（被写体）RMSE（位相バイアス）グラフ描画用
-RMSEs_o = zeros(sigmas_len, 1);
-stds_rmse_o = zeros(sigmas_len, 1);
-SSIMs_o = zeros(sigmas_len, 1);
-stds_ssim_o = zeros(sigmas_len, 1);
-RMSEs_r = zeros(sigmas_len, 1);
-stds_r = zeros(sigmas_len, 1);
+RMSEs_o = zeros(Ks_len, 1);
+stds_rmse_o = zeros(Ks_len, 1);
+SSIMs_o = zeros(Ks_len, 1);
+stds_ssim_o = zeros(Ks_len, 1);
+RMSEs_r = zeros(Ks_len, 1);
+stds_r = zeros(Ks_len, 1);
 
-for idx_sigma = 1:sigmas_len     %シグマを切り替えてループ
-    %シグマを設定
-    sigma = sigmas(idx_sigma);
+%初期値のリスト
+O_hat_inits = rand(N,N,num_inits); %Oの初期値のリスト
+r_hat_inits = array.*rand(N,N,num_inits)*2*pi; %rの初期値のリスト
+
+for idx_K = 1:Ks_len     %Kを切り替えてループ
+    %Kを設定
+    K = Ks(idx_K);
+    data_indice = randperm(K); %ミニバッチ列を用意
+
     %ハイパーパラメータを設定
-    rho_O = rho_O_tuned(idx_sigma);
+    rho_O = rho_O_tuned(idx_K);
+
+    %位相シフトKパターン（N×N×K）を設定
+    phi = array.*rand(N,N,K)*2*pi;
+    %アンテナ配置×位相シフト（N×N×K）
+    A = array.*exp(1i*phi);
 
     %SSIM,RMSEの平均・標準偏差計算のための記憶用変数の初期化
-    RMSE_tmp_o = zeros(num_Gauss_trial, 1); 
-    SSIM_tmp_o = zeros(num_Gauss_trial, 1); 
-    RMSE_tmp_r = zeros(num_Gauss_trial, 1); 
+    RMSE_tmp_o = zeros(num_phase_bias, 1); 
+    SSIM_tmp_o = zeros(num_phase_bias, 1); 
+    RMSE_tmp_r = zeros(num_phase_bias, 1); 
 
-    %アンテナ配置seedをnum_Gauss_trial通り切り替えてループ
-    for seed = 1:num_Gauss_trial
-        %アンテナ配置
-        array = Gaussianarray_gen(N,num_antenna,sigma);
-        %位相シフトKパターン（N×N×K）を設定
-        phi = array.*rand(N,N,K)*2*pi;
-        %アンテナ配置×位相シフト（N×N×K）
-        A = array.*exp(1i*phi);
-        %位相バイアス（N×N）を設定
-        r = array.*(rand(N)*2*pi);
-
-        %初期値のリスト
-        O_hat_inits = rand(N,N,num_inits); %Oの初期値のリスト
-        r_hat_inits = array.*rand(N,N,num_inits)*2*pi; %rの初期値のリスト
+    %位相バイアスseedをnum_phase_bias通り切り替えてループ
+    for seed = 1:num_phase_bias
+        r = phase_biases(:,:,seed);
        
         %順伝播:PDの観測強度（K×1）を計算
         S = zeros(1,K);
@@ -355,7 +357,7 @@ for idx_sigma = 1:sigmas_len     %シグマを切り替えてループ
         %for trial = 1:num_inits
         parfor trial = 1:num_inits
             %進捗を表示
-            progress = sprintf('sigma=%.1f (%d/%d),Gaussアレイseed(%d/%d),初期値trial(%d/%d)を計算中',sigma,idx_sigma,sigmas_len,seed,num_Gauss_trial,trial,num_inits);
+            progress = sprintf('K=%d (%d/%d),位相バイアスseed(%d/%d),初期値trial(%d/%d)を計算中',K,idx_K,Ks_len,seed,num_phase_bias,trial,num_inits);
             disp(progress);
             
             %figure(trial);
@@ -597,7 +599,7 @@ for idx_sigma = 1:sigmas_len     %シグマを切り替えてループ
         drawnow();
 
         %結果を保存
-        save_dir = sprintf('./figure_GaussianSigma_検証_sub/M2_%s_sigma%.1f_%s_N%d_K%d_sup%d_noise%d/',array_name,sigma,obj_name,N,K,sup_size,noiseLv);
+        save_dir = sprintf('./figure_GaussianK_検証/M2_%s_%s_N%d_K%d_sup%d_noise%d/',array_name,obj_name,N,K,sup_size,noiseLv);
         mkdir(save_dir);
         filename_fig = sprintf('%s%d.fig',save_dir,seed);
         filename_png = sprintf('%s%d.png',save_dir,seed);
@@ -606,7 +608,7 @@ for idx_sigma = 1:sigmas_len     %シグマを切り替えてループ
         savefig(filename_fig);
         print(filename_png, '-dpng', '-r300');
 
-        finishMessage = sprintf('sigma=%.1f (%d/%d),Gaussアレイseed(%d/%d)の結果を保存 (RMSE_o_best=%.4f,SSIM_o_best=%.4f,RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',sigma,idx_sigma,sigmas_len,seed,num_Gauss_trial,RMSE_o_best,SSIM_o_best,RMSE_r_best,row_add_best,col_add_best);
+        finishMessage = sprintf('K=%d (%d/%d),位相バイアスseed(%d/%d)の結果を保存 (RMSE_o_best=%.4f,SSIM_o_best=%.4f,RMSE_r_best=%.4f, [row,col]_add=[%d,%d])',K,idx_K,Ks_len,seed,num_phase_bias,RMSE_o_best,SSIM_o_best,RMSE_r_best,row_add_best,col_add_best);
         disp(finishMessage);
 
         %SSIM,RMSEを保存
@@ -614,43 +616,44 @@ for idx_sigma = 1:sigmas_len     %シグマを切り替えてループ
         SSIM_tmp_o(seed) = SSIM_o_best;
         RMSE_tmp_r(seed) = RMSE_r_best;
 
-        clearvars phi A      
-    end %アンテナ配置seed（num_Gauss_trial通り）を切り替えてのループ終了
-    
-    RMSEs_o(idx_sigma) = mean(RMSE_tmp_o);
-    stds_rmse_o(idx_sigma) = std(RMSE_tmp_o);
-    SSIMs_o(idx_sigma) = mean(SSIM_tmp_o);
-    stds_ssim_o(idx_sigma) = std(SSIM_tmp_o);
-    RMSEs_r(idx_sigma) = mean(RMSE_tmp_r);
-    stds_r(idx_sigma) = std(RMSE_tmp_r);
+              
+    end %位相バイアスseed（num_phase_bias通り）を切り替えてのループ終了
 
+    RMSEs_o(idx_K) = mean(RMSE_tmp_o);
+    stds_rmse_o(idx_K) = std(RMSE_tmp_o);
+    SSIMs_o(idx_K) = mean(SSIM_tmp_o);
+    stds_ssim_o(idx_K) = std(SSIM_tmp_o);
+    RMSEs_r(idx_K) = mean(RMSE_tmp_r);
+    stds_r(idx_K) = std(RMSE_tmp_r);
+
+    clearvars phi A
 end
 
-RMSE_path = './figure_GaussianSigma_検証_sub/RMSE/';
+RMSE_path = './figure_GaussianK_検証/RMSE/';
 mkdir(RMSE_path);
 
 figure(1000);
 subplot(1,3,1)
-errorbar(sigmas,RMSEs_o,stds_rmse_o);
+errorbar(Ks,RMSEs_o,stds_rmse_o,'LineWidth',1);
 title('RMSE of object');
-xlabel('Sigma');
+xlabel('Number of measurement');
 ylabel('Reconstruction RMSE');
 
 subplot(1,3,2)
-errorbar(sigmas,SSIMs_o,stds_ssim_o);
+errorbar(Ks,SSIMs_o,stds_ssim_o,'LineWidth',1);
 title('SSIM of object');
-xlabel('Sigma');
+xlabel('Number of measurement');
 ylabel('Reconstruction SSIM');
 
 subplot(1,3,3)
-errorbar(sigmas,RMSEs_r,stds_r);
+errorbar(Ks,RMSEs_r,stds_r,'LineWidth',1);
 title('RMSE of phase bias');
-xlabel('Sigma');
+xlabel('Number of measurement');
 ylabel('Reconstruction RMSE');
 
 %RMSEのグラフを保存
-RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.fig',RMSE_path,obj_name,array_name,N,sup_size,noiseLv,num_Gauss_trial);
-RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.png',RMSE_path,obj_name,array_name,N,sup_size,noiseLv,num_Gauss_trial);
+RMSE_fig = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.fig',RMSE_path,obj_name,array_name,N,sup_size,noiseLv,num_phase_bias);
+RMSE_png = sprintf('%sM2_%s_%s_N%d_sup%d_noise%d_numE%d.png',RMSE_path,obj_name,array_name,N,sup_size,noiseLv,num_phase_bias);
 savefig(RMSE_fig);
 print(RMSE_png, '-dpng', '-r300');
 

@@ -5,14 +5,14 @@ poolobj = parpool('Threads'); %並列処理用
 
 M = 10;      %uniformアレイの1辺の長さ
 N = 100;     %アンテナの1辺の長さ
-K = N^2*8;   %計測回数
+K = N^2*2;   %計測回数
 
 %Gaussianアレイの配置パターン数
 num_antennas = ceil([N/2,N/1.5,N,N*1.5,N*2,N*3,N*4]);
 %num_antennas = ceil([N,N*4]);
 num_antennas_len = length(num_antennas);
 %Gaussianアレイのシグマ
-sigma = 10;
+sigma = 7.5;
 array_name = sprintf('GaussSigma%d',sigma);
 
 %あるアンテナ数のGaussianアレイのパターン数
