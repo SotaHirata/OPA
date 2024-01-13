@@ -36,7 +36,6 @@ max_itr = 1.5e4;
 %SGDの設定
 batch_size = 2^5; %バッチサイズ
 num_epoch = 1000; %エポック数（今回はmax_itrで停止するので無関係. 十分大にしておく）
-data_indice = randperm(K); %ミニバッチ列を用意
     
 %サポート
 sup_size = N;
@@ -90,6 +89,8 @@ rho_O_tuned = zeros(Ks_len,1);
 for idx_K = 1:Ks_len %Kごとに最適なrho_Oを決める
     %計測回数を設定
     K = Ks(idx_K);
+    data_indice = randperm(K); %ミニバッチ列を用意
+
     %位相シフトKパターン（N×N×K）を設定
     phi = array.*rand(N,N,K)*2*pi;
     %アンテナ配置×位相シフト（N×N×K）
@@ -368,6 +369,7 @@ stds_r = zeros(Ks_len, 1);
 for idx_K = 1:Ks_len     %Kを切り替えてループ
     %Kを設定
     K = sigmas(idx_K);
+    data_indice = randperm(K); %ミニバッチ列を用意
     %ハイパーパラメータを設定
     rho_O = rho_O_tuned(idx_K);
 
